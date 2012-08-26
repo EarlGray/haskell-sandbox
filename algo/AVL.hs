@@ -38,28 +38,22 @@ rebalance :: Ord a => AVLTree a -> AVLTree a
 
 rebalance AVLEmpty = AVLEmpty
 rebalance tree | abs (balance tree) <= 1 = tree
-rebalance tree | (balance tree == -2) && (balance r == (-1)) =
+rebalance tree@(AVLBranch v l r) | (balance tree == -2) && (balance r == (-1)) =
     AVLBranch (val r) (AVLBranch v l (left r)) (right r)
-        where r = right tree
-              l = left tree
-              v = val tree
-rebalance tree | (balance tree == -2) && (balance r == 1) =
-    rebalance $ AVLBranch (val tree) (left tree) r'
+
+rebalance tree@(AVLBranch v l r) | (balance tree == -2) && (balance r == 1) =
+    rebalance $ AVLBranch v l r'
         where r' = AVLBranch (val rl) (left rl) rr'
               rr' = AVLBranch (val r) (right rl) (right r)
-              r = right tree
               rl = left r
 
-rebalance tree | (balance tree == 2) && (balance l == 1) =
+rebalance tree@(AVLBranch v l r) | (balance tree == 2) && (balance l == 1) =
     AVLBranch (val l) (left l) (AVLBranch v (right l) r)
-        where l = left tree
-              r = right tree
-              v = val tree
-rebalance tree | (balance tree == 2) && (balance l == (-1)) =
-    rebalance $ AVLBranch (val tree) l' (right tree)
+
+rebalance tree@(AVLBranch v l r) | (balance tree == 2) && (balance l == (-1)) =
+    rebalance $ AVLBranch v l' (right tree)
         where l' = AVLBranch (val lr) ll' (right lr)
               ll' = AVLBranch (val l) (left l) (left lr)
-              l = left tree
               lr = right l
 
 rebalance (AVLBranch v l r) =
