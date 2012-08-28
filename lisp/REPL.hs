@@ -3,10 +3,14 @@ module Main where
 import AST
 import Eval
 
+import System.IO
+
 repl :: Env -> IO ()
 repl env = do
+    putStr ">> "
+    hFlush stdout
     line <- getLine
-    if ":q" == line 
+    if ":q" == line
     then return ()
     else do
         let inp = readSExpr line
