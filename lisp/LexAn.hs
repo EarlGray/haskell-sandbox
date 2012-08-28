@@ -1,6 +1,6 @@
 module LexAn (
     Lexeme(..),
-    lexicalAnalizer
+    lexicalAnalyzer
 ) where
 
 import Data.Maybe (isJust, fromJust, fromMaybe)
@@ -85,17 +85,17 @@ lexicalSM c (LSString _)                            = LSError
 lexicalSM c (LSComment) | c == '\n' = LSWhitespace
 lexicalSM c (LSComment)             = LSComment
 
-lexicalAnalizer' :: LState -> String -> [Lexeme]
-lexicalAnalizer' s [] = [lexem]
+lexicalAnalyzer' :: LState -> String -> [Lexeme]
+lexicalAnalyzer' s [] = [lexem]
     where lexem = fromMaybe LError $ maybeLexeme s Nothing
     
-lexicalAnalizer' s (c:cs) = 
+lexicalAnalyzer' s (c:cs) = 
     let ns = lexicalSM c s
         mbLexeme = maybeLexeme s (Just ns)
     in case mbLexeme of
         Just LError -> [ LError ]
-        Just lexem -> lexem:(lexicalAnalizer' ns cs)
-        Nothing -> lexicalAnalizer' ns cs
+        Just lexem -> lexem:(lexicalAnalyzer' ns cs)
+        Nothing -> lexicalAnalyzer' ns cs
 
 isValidStateAfterWord :: Maybe LState -> Bool
 isValidStateAfterWord mbLs = 
@@ -138,7 +138,7 @@ lexemFromSymbol c = case c of
     '\'' -> LQuote
     _ -> LError
 
-lexicalAnalizer :: String -> [Lexeme]
-lexicalAnalizer [] = []
-lexicalAnalizer s = lexicalAnalizer' LSWhitespace s
+lexicalAnalyzer :: String -> [Lexeme]
+lexicalAnalyzer [] = []
+lexicalAnalyzer s = lexicalAnalyzer' LSWhitespace s
 

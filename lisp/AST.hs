@@ -3,9 +3,15 @@ module AST (
     Atom(..),
 
     topSExprs, 
+    readSExpr,
     makeSExp,
+
     toSymbol,
+    symbolName,
     quote,
+
+    isTrue,
+    falseConst
 ) where
 
 import LexAn
@@ -21,6 +27,9 @@ data Atom = AtomInt Integer
           | AtomString String
           | AtomSymbol String
 
+truthConst = "#t"
+falseConst = "#f"
+
 instance Show SExpr where
     show (SError s) = "*** " ++ s
     show (SAtom atom) = show atom
@@ -35,8 +44,27 @@ instance Show Atom where
 toSymbol :: String -> SExpr
 toSymbol s = SAtom $ AtomSymbol s
 
+symbolName :: SExpr -> Maybe String
+symbolName (SAtom a) = symAtomName a
+symbolName _ = Nothing
+
+symAtomName :: Atom -> Maybe String
+symAtomName (AtomSymbol sym) = Just sym
+symAtomName _ = Nothing
+
+isTrue :: SExpr -> Bool
+isTrue (SList []) = False
+isTrue (SAtom atom) = case atom of
+    AtomSymbol "nil" -> False
+    _ -> True
+isTrue _ = True
+
 quote :: SExpr -> SExpr
 quote sexp = SList [toSymbol "quote", sexp]
+
+readSExpr :: String -> SExpr
+readSExpr s = let (se, ls) = makeSExp $ lexicalAnalyzer s
+              in if null ls then se else SError "syntax error"
 
 topSExprs :: [Lexeme] -> [SExpr]
 topSExprs ls = topSExprs' [] ls
@@ -66,3 +94,4 @@ makeSList (LCP : ls) (SList ss) = ((SList $ reverse ss), ls)
 makeSList ls (SList ss) =
     let (item, ls') = makeSExp ls
     in makeSList ls' $ SList (item:ss)
+
