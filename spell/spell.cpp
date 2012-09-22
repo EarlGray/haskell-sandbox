@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iterator>
 #include <algorithm>
+#include <vector>
 #include <unordered_set>
 #include <cctype>
 using namespace std;
