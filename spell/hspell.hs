@@ -9,7 +9,7 @@ bwords = map B.fromString . words . B.toString
 
 main :: IO ()
 main = do
-    dict <- liftM (S.fromList . bwords) $ B.readFile "/usr/share/dict/words"
+    dict <- liftM (S.fromList . B.lines) $ B.readFile "/usr/share/dict/words"
     (fname:_) <- getArgs
     file <- B.readFile fname
     let ws = bwords file
