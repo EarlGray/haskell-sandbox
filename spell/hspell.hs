@@ -1,7 +1,8 @@
-import System.Environment (getArgs)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.Set as S
+import Data.Char (isAlpha, toLower)
 import Control.Monad 
+import System.Environment (getArgs)
 
 main :: IO ()
 main = do
@@ -12,4 +13,6 @@ main = do
     mapM_ (putStrLn . show) $ checkWords dict ws
 
 checkWords :: S.Set B.ByteString -> [B.ByteString] -> [B.ByteString]
-checkWords d ws = filter (flip S.notMember d) ws
+checkWords d ws = filter (flip S.notMember d . clean) ws
+
+clean = B.filter (\c -> isAlpha (toLower c) || c `elem` "'")
