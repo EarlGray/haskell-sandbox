@@ -13,7 +13,8 @@ EXE=DynLib
 .PHONY: run, clean, nuke
 
 run: $(EXE) $(LIB)
-	LD_LIBRARY_PATH=. ./$(EXE)
+	@echo "###############################################################"; echo
+	@LD_LIBRARY_PATH=. ./$(EXE)
 
 $(LIB):
 	$(CC) -shared -fPIC -Wl,-soname,$(LIBNAME) -o $(LIBMAJMIN) $(SRC)
