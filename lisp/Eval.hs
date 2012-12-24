@@ -32,8 +32,19 @@ eval env sList@(SList ss@((SAtom hd):tl)) =
     case hd of
       AtomSymbol "quote" -> (val, env)
         where val = fromMaybe (head tl) $ assertFormLength 2 ss
-      AtomSymbol "if" -> fromMaybe (evalIf env predf thenf elsef) $ withEnv env $ assertFormLength 4 ss
+      AtomSymbol "if" -> fromMaybe result $ withEnv env $ assertFormLength 4 ss
         where (predf:(thenf:(elsef:_))) = tl
+              result = (evalIf env predf thenf elsef)
+      AtomSymbol "car" -> fromMaybe (car, env') $ withEnv env $ assertFormLength 2 ss
+        where (arg, env') = eval env (head tl)
+              car = case arg of
+                SList (c:_) -> c
+                _ -> SError "Non-empty list expected"
+      AtomSymbol "cdr" -> fromMaybe (cdr, env') $ withEnv env $ assertFormLength 2 ss
+        where (arg, env') = eval env (head tl)
+              cdr = case arg of
+                SList (_:t) -> SList t
+                _ -> SError "No list tail"
       AtomSymbol _ -> (SError "eval: don't know how to evaluate the form", env)
 
 eval env _ = (SError "eval error", env)
