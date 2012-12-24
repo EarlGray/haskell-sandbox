@@ -3,11 +3,9 @@
 import Foreign
 import Foreign.C.Types
 import Foreign.C.String
-import Foreign.Ptr
-import Data.ByteString as B
-import Control.Monad (when)
 import System.Exit
 import System.Environment
+import Control.Monad (when)
 import Prelude as P
 
 type DLHandle = ()
