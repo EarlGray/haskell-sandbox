@@ -6,15 +6,14 @@ import Foreign.C.String
 import System.Exit
 import System.Environment
 import Control.Monad (when)
-import Prelude as P
 
 type DLHandle = ()
 type VoidFunction = IO ()
 
 exitWithMsg :: String -> Int -> IO a
 exitWithMsg msg err = do
-  P.putStrLn msg
-  c_dlerror >>= peekCString >>= P.putStrLn
+  putStrLn msg
+  c_dlerror >>= peekCString >>= putStrLn
   exitWith $ ExitFailure err
 
 rtldLazy = CInt 0x00001
@@ -33,7 +32,7 @@ foreign import ccall "dynamic"
 
 main = do
   args <- getArgs
-  let funcname = if P.null args then "hello" else P.head args
+  let funcname = if null args then "hello" else head args
 
   h <- withCString "libso.so" $ flip c_dlopen rtldLazy
   when (nullPtr == h) $ exitWithMsg "Failed to open library" 1
