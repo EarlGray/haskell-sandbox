@@ -1,5 +1,5 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
-{-# INCLUDE dlfcn.h #-}
+
 import Foreign
 import Foreign.C.Types
 import Foreign.C.String
@@ -7,10 +7,17 @@ import Foreign.Ptr
 import Data.ByteString as B
 import Control.Monad (when)
 import System.Exit
+import System.Environment
 import Prelude as P
 
 type DLHandle = ()
 type VoidFunction = IO ()
+
+exitWithMsg :: String -> Int -> IO a
+exitWithMsg msg err = do
+  P.putStrLn msg
+  c_dlerror >>= peekCString >>= P.putStrLn
+  exitWith $ ExitFailure err
 
 rtldLazy = CInt 0x00001
 
@@ -27,16 +34,14 @@ foreign import ccall "dynamic"
   mkFun :: FunPtr VoidFunction -> VoidFunction
 
 main = do
-  h <- withCString "libso.so" $ flip c_dlopen rtldLazy
-  when (nullPtr == h) $ do
-    P.putStrLn "Failed to open library"
-    c_dlerror >>= packCString >>= B.putStrLn
-    exitWith $ ExitFailure 1
+  args <- getArgs
+  let funcname = if P.null args then "hello" else P.head args
 
-  func_ptr <- withCString "hello" $ c_dlsym h
-  when (nullFunPtr == func_ptr) $ do
-    P.putStrLn "Failed to get the symbol"
-    exitWith $ ExitFailure 2
+  h <- withCString "libso.so" $ flip c_dlopen rtldLazy
+  when (nullPtr == h) $ exitWithMsg "Failed to open library" 1
+
+  func_ptr <- withCString funcname $ c_dlsym h
+  when (nullFunPtr == func_ptr) $ exitWithMsg "Failed to get the symbol" 2
 
   let sayHello = mkFun func_ptr
   sayHello
