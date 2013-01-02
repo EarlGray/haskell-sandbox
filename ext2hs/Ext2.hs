@@ -3,8 +3,9 @@ module Ext2 where
 
 import Data.Int
 import Data.Word
-import Data.Bits (testBit)
+import Data.Bits
 import Data.List (intersperse)
+import Data.Maybe (fromMaybe, fromJust)
 
 import Data.Binary
 import Data.Binary.Get
@@ -38,6 +39,19 @@ putByteList :: [Word8] -> Put
 --putByteList = putByteString . BI.packBytes
 putByteList = putByteString . BS.pack
 
+class SizeOfAble a where
+  sizeOf :: SizeOfAble a => a -> Word
+
+data UnixTimestamp = UnixTime { unixSeconds :: U32 } deriving Show
+
+data FileMode = FileMode { fmode :: U16 }
+
+instance Show FileMode where
+ show (FileMode mode) = t : rights
+    where t = fromJust $ lookup (mode `shiftR` 12) $ zip [1, 2, 4, 6, 8, 0xa, 0xc] "pcdb-ls"
+          rights = zipWith (\c f -> if f then c else '-') "rwxrwxwx" $ map (testBit mode) [8,7..0]
+
+
 ------- UUID ----
 
 newtype UUID = UUID { uuidBytes :: [Word8] }
@@ -47,7 +61,7 @@ instance Binary UUID where
   put = putByteList . uuidBytes
 
 instance Show UUID where
-  show (UUID ws) = pretty $ splitLst ws [4,2,2,2,6]
+  show (UUID ws) = pretty $ splitLst ws $ reverse [4,2,2,2,6]
     where hexShow = concat . map (printf "%02x" :: Word8 -> String)
           splitLst xs = snd . foldr iter (xs,[])
           iter c (xs,ac) = (xs', ac ++ [chunk]) where (chunk,xs') = splitAt c xs
@@ -75,7 +89,7 @@ data FileBlkDev = FileBlkDev {
     blksz :: Word
 } deriving (Show)
 
-type BlockIndex = Int64
+type BlockIndex = Word
 
 instance BlockDevice FileBlkDev where
     blockSize = blksz
@@ -95,6 +109,7 @@ data E2FeatureCompat = E2FeatCompatAny
         e2FC_DirPrealloc,   e2FC_IMagicInodes,  e2FC_HasJournal :: Bool,
         e2FC_ExtAttrs,      e2FC_ResizeIno,     e2FC_DirIndex :: Bool
     }
+  deriving (Show)
 
 featuresCompat :: U32 -> E2FeatureCompat
 featuresCompat 0xffffffff = E2FeatCompatAny
@@ -107,7 +122,6 @@ featuresCompat w = E2FeatCompat {
     e2FC_DirIndex =     testBit w 5
 }
 
-instance Show E2FeatureCompat
 instance Binary E2FeatureCompat where
   get = featuresCompat <$> getWord32le
   put = fail "TODO"
@@ -115,6 +129,7 @@ instance Binary E2FeatureCompat where
 ---- Readonly compatible features
 data E2FeatureROCompat = E2FeatROCompatAny
     | E2FeatROCompat {  e2FRC_SparseSuper, e2FRC_LargeFile, e2FRC_BTreeDir :: Bool  }
+  deriving (Show)
 
 featuresROCompat :: U32 -> E2FeatureROCompat
 featuresROCompat 0xffffffff = E2FeatROCompatAny
@@ -124,7 +139,6 @@ featuresROCompat w = E2FeatROCompat {
     e2FRC_BTreeDir =    testBit w 2
 }
 
-instance Show E2FeatureROCompat
 instance Binary E2FeatureROCompat where
   get = featuresROCompat <$> getWord32le
   put = fail "TODO"
@@ -134,6 +148,7 @@ data E2FeatureIncompat = E2FeatIncompatAny
     | E2FeatIncompat {
         e2FIC_Compression, e2FIC_Filetype, e2FIC_Recover,
         e2FIC_JourDev, e2FIC_MetaBlockGr :: Bool    }
+  deriving (Show)
 
 featuresIncompat :: U32 -> E2FeatureIncompat
 featuresIncompat 0xffffffff = E2FeatIncompatAny
@@ -145,10 +160,17 @@ featuresIncompat w = E2FeatIncompat {
     e2FIC_MetaBlockGr = testBit w 4
 }
 
-instance Show E2FeatureIncompat
 instance Binary E2FeatureIncompat where
   get = featuresIncompat <$> getWord32le
   put = fail "TODO"
+
+----- Creator OS
+osEnum = zip [0,1..] ["Linux", "HURD", "Masix", "FreeBSD", "Lites"]
+
+data OSEnum = OSEnum { osenum :: U32 }
+
+instance Show OSEnum where
+  show (OSEnum os) = fromMaybe (printf "Unknown (%d)" os) $ lookup os osEnum
 
 ----- Superblock
 
@@ -175,7 +197,7 @@ data Superblock = Superblock {
 
   sLastCheckTime      :: U32,
   sCheckInterval      :: U32,
-  sCreatorOS          :: U32,
+  sCreatorOS          :: OSEnum,
   sRevLevel           :: (U32, U16),
 
   sDefaultResUID      :: U16,
@@ -184,7 +206,7 @@ data Superblock = Superblock {
   sDynRev     :: Maybe SbDynRev,
   sPrealloc   :: Maybe SbPrealloc,
   sJournaling :: Maybe SbJournaling
-}
+} deriving (Show)
 
 binGetSuperblock = do
   uint13  <- replicateM 13   getWord32le
@@ -204,7 +226,7 @@ binGetSuperblock = do
     sMagic = ushort6 !! 2,          sState = ushort6 !! 3,
     sErrors = ushort6 !! 4,
     sLastCheckTime = uint4 !! 0,    sCheckInterval = uint4 !! 1,
-    sCreatorOS = uint4 !! 2,        sRevLevel = (uint4 !! 3, ushort6 !! 5),
+    sCreatorOS = OSEnum (uint4 !! 2),        sRevLevel = (uint4 !! 3, ushort6 !! 5),
 
     sDefaultResUID = ushort2 !! 0,  sDefaultResGID = ushort2 !! 1,
 
@@ -216,6 +238,8 @@ binGetSuperblock = do
 instance Binary Superblock where
   get = binGetSuperblock
   put = fail "TODO"
+
+instance SizeOfAble Superblock where sizeOf _ = 1024
 
 
 ----- Superblock substructures
@@ -231,12 +255,12 @@ data SbDynRev = SbDynRev {
   sVolumeName         :: String,
   sLastMountedAt      :: String,
   sAlgoUsageBmap      :: U32
-}
+} deriving (Show)
 
 data SbPrealloc = SbPrealloc {
     sPreallocBlocks     :: U8,
     sPreallocDirBlocks  :: U8
-}
+} deriving (Show)
 
 data SbJournaling = SbJournaling {
     sJournalUUID        :: UUID,
@@ -247,7 +271,7 @@ data SbJournaling = SbJournaling {
     sDefHashVersion     :: U8,
     sDefaultMountOpts   :: U32,
     sFirstMetaBlockGr   :: U32
-}
+} deriving (Show)
 
 binGetSbDynRev = do
   fstIno <- getWord32le
@@ -313,3 +337,72 @@ readSuperblock bs = flip runGet bs $ do
         else do
           sbj <- get
           return $ Left (sb'' { sJournaling = Just sbj })
+
+---- Blockgroups descriptors -----
+
+data BlockGroupDescriptor = BlockGroupDescriptor {
+  bgBlockBitmap :: BlockIndex,
+  bgInodeBitmap :: BlockIndex,
+  bgInodeTable :: BlockIndex,
+  bgFreeBlocksCount :: U16,
+  bgFreeInodesCount :: U16,
+  bgUsedDirsCount :: U16
+} deriving (Show)
+
+binGetBlkGrDescr = do
+  bitmaps <- replicateM 3  getWord32le
+  counts <- replicateM 3 getWord16le
+  skip 14
+  return BlockGroupDescriptor {
+    bgBlockBitmap = fromIntegral (bitmaps!!0),
+    bgInodeBitmap = fromIntegral (bitmaps!!1),
+    bgInodeTable = fromIntegral (bitmaps!!2),
+
+    bgFreeBlocksCount = counts!!0,
+    bgFreeInodesCount = counts!!1,
+    bgUsedDirsCount = counts!!2
+  }
+
+instance SizeOfAble BlockGroupDescriptor where sizeOf _ = 32
+
+instance Binary BlockGroupDescriptor where
+  get = binGetBlkGrDescr
+  put = fail "TODO"
+
+---- Inode structure -----
+
+data Inode = Inode {
+  iMode :: FileMode,
+  iUID :: U16,
+  iSize :: U32,
+  iAccessTime :: UnixTimestamp,
+  iCreatTime :: UnixTimestamp,
+  iModifTime :: UnixTimestamp,
+  iDeletTime :: UnixTimestamp,
+  iGID :: U16,
+  iLinksCount :: U16,
+  iBlocksCount :: U32,
+  iFlags :: U32,
+  iHeadBlocks :: [BlockIndex],
+  iIndirectBlock :: BlockIndex,
+  iDoubleIndirBlock :: BlockIndex,
+  iTrippleIndirBlock :: BlockIndex
+} deriving (Show)
+
+
+---- Ext2FS structure -----
+
+data Ext2FS = Ext2FS {
+  super :: Superblock,
+  bdev :: FileBlkDev
+}
+
+fsblockSize :: Ext2FS -> Word
+fsblockSize (Ext2FS sb _) = 1024 `shiftL` (fromIntegral $ sLogBlockSize sb)
+
+fsInoSize :: Ext2FS -> U16
+fsInoSize (Ext2FS sb _) = fromMaybe defInoSize (sInodeSize <$> sDynRev sb)
+
+readBlkGrTable :: Int -> B.ByteString -> [BlockGroupDescriptor]
+readBlkGrTable nr = runGet $ replicateM nr get
+
