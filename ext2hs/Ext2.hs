@@ -9,6 +9,7 @@ import Data.List (intersperse)
 import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Internal as BI
 
@@ -30,10 +31,12 @@ int = fromIntegral
 
 ------- Binary helpers -----
 getByteList :: Int -> Get [Word8]
-getByteList n = BI.unpackBytes <$> getBytes n
+--getByteList n = BI.unpackBytes <$> getBytes n
+getByteList n = BS.unpack <$> getByteString n
 
 putByteList :: [Word8] -> Put
-putByteList = putByteString . BI.packBytes
+--putByteList = putByteString . BI.packBytes
+putByteList = putByteString . BS.pack
 
 ------- UUID ----
 
@@ -285,27 +288,28 @@ binGetSbJournaling = do
     sDefaultMountOpts = defmntopts,                 sFirstMetaBlockGr = fstmblkgr
  }
 
-{-
+instance Binary SbJournaling where
+  get = binGetSbJournaling
+  put = fail "TODO"
+
 readSuperblock :: B.ByteString -> Either Superblock Error
 readSuperblock bs = flip runGet bs $ do
   sb <- get
   let magic = fromIntegral $ sMagic sb
   if magic /= sbMagic
-  then return Right $ "Wrong Ext2 magic : " ++ show magic
+  then return $ Right ("Wrong Ext2 magic : " ++ show magic)
   else if fst (sRevLevel sb) == 0
-    then return Left sb
+    then return $ Left sb
     else do
       sbdyn <- get
       let sb' = sb { sDynRev = Just sbdyn }
-      if not $ e2FC_DirPrealloc
-      then return Left sb'
+      if not $ e2FC_DirPrealloc (sFeatureCompat sbdyn)
+      then return $ Left sb'
       else do
         sbpa <- get
-        let sb'' = sb' { sPrealloc = sbpa }
+        let sb'' = sb' { sPrealloc = Just sbpa }
         if not $ e2FC_HasJournal (sFeatureCompat sbdyn)
-        then return Left sb''
+        then return $ Left sb''
         else do
           sbj <- get
-          return Left sb'' { sJournaling = sbj }
-
--}
+          return $ Left (sb'' { sJournaling = Just sbj })
