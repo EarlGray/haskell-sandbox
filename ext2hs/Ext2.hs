@@ -371,6 +371,8 @@ instance Binary BlockGroupDescriptor where
 
 ---- Inode structure -----
 
+directBlocksCount = 12
+
 data Inode = Inode {
   iMode :: FileMode,
   iUID :: U16,
@@ -389,6 +391,34 @@ data Inode = Inode {
   iTrippleIndirBlock :: BlockIndex
 } deriving (Show)
 
+instance Binary Inode where
+  get = binGetInode
+  put = fail "TODO"
+
+binGetInode = do
+  mode <- FileMode <$> getWord16le
+  uid <- getWord16le
+  size <- getWord32le
+  atime <- UnixTime <$> getWord32le
+  ctime <- UnixTime <$> getWord32le
+  mtime <- UnixTime <$> getWord32le
+  dtime <- UnixTime <$> getWord32le
+  gid <- getWord16le
+  nlinks <- getWord16le
+  nblocks <- getWord32le
+  flags <- getWord32le
+  hdblocks <- replicateM directBlocksCount getWord32le
+  ind1b <- getWord32le
+  ind2b <- getWord32le
+  ind3b <- getWord32le
+  return Inode {
+    iMode = mode, iUID = uid, iSize = size,
+    iAccessTime = atime, iCreatTime = ctime, iModifTime = mtime, iDeletTime = dtime,
+    iGID = gid,  iLinksCount = nlinks,  iBlocksCount = nblocks, iFlags = flags,
+    iHeadBlocks = map fromIntegral hdblocks,
+    iIndirectBlock = fromIntegral ind1b,
+    iDoubleIndirBlock = fromIntegral ind2b,
+    iTrippleIndirBlock = fromIntegral ind3b }
 
 ---- Ext2FS structure -----
 
@@ -406,3 +436,4 @@ fsInoSize (Ext2FS sb _) = fromMaybe defInoSize (sInodeSize <$> sDynRev sb)
 readBlkGrTable :: Int -> B.ByteString -> [BlockGroupDescriptor]
 readBlkGrTable nr = runGet $ replicateM nr get
 
+---- Inode
