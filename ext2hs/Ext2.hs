@@ -471,7 +471,7 @@ data Ext2FS = Ext2FS {
 
 instance BlockDevice Ext2FS where
   readBytes fs = readBytes (bdev fs)
-  readBlock = readBlock (bdev fs)
+  readBlock fs = readBlock (bdev fs)
   blockSize = fsblockSize
 
 fsblockSize :: Ext2FS -> Word
