@@ -15,8 +15,8 @@ import qualified Data.ByteString.Internal as BI
 
 import System.IO
 import Text.Printf
-import Control.Applicative ((<$>), (<*), liftA2)
-import Control.Monad (replicateM)
+import Control.Applicative ((<$>), (<*), (<*>), liftA2)
+import Control.Monad (join, replicateM, msum)
 
 --import System.Posix.Files
 --import System.Posix.Types
@@ -432,7 +432,7 @@ data DirEntry = DirEntry {
   deRecSize :: U16,
   deFileType :: U8,
   deName :: String
-}
+} deriving (Show)
 
 instance Binary DirEntry where
   get = binGetDirEntry
@@ -443,15 +443,23 @@ binGetDirEntry = do
   recsz <- getWord16le
   namelen <- getWord8
   ftype <- getWord8
-  namestr <- getByteList $ fromIntegral (recsz - 8)
+  namestr <- if ino == 0 
+      then return [] 
+      else getByteList $ fromIntegral (recsz - 8)
   return DirEntry {
     deInode = fromIntegral ino,
     deRecSize = recsz,
     deFileType = ftype,
-    deName = show . take (fromIntegral namelen) $ namestr
+    deName = show . B.pack . take (fromIntegral namelen) $ namestr  -- TODO : this shows the list, not the string
   }
 
---readDirEntries = 
+getDirEntries :: Get [DirEntry]
+getDirEntries = do
+  de <- binGetDirEntry
+  if deInode de /= 0
+  then (de:) <$> getDirEntries
+  else return [] -- -}
+  
 
 ---- Ext2FS structure -----
 
@@ -460,6 +468,11 @@ data Ext2FS = Ext2FS {
   bgds :: [BlockGroupDescriptor],
   bdev :: FileBlkDev
 }
+
+instance BlockDevice Ext2FS where
+  readBytes fs = readBytes (bdev fs)
+  readBlock = readBlock (bdev fs)
+  blockSize = fsblockSize
 
 fsblockSize :: Ext2FS -> Word
 fsblockSize fs = 1024 `shiftL` (fromIntegral $ sLogBlockSize $ super fs)
@@ -489,6 +502,35 @@ readInode fs ino = decode <$> readBytes (bdev fs) (inoOffset, fromIntegral inosz
         fstBlock = fromIntegral $ sFirstDataBlock (super fs)
         inoOffset = toInteger $ blksz * (inoTableStart) + inosz * fromIntegral bgInd
 
-{-readDirEntries :: Ext2FS -> Inode -> IO [DirEntry]
+readBlockAsBlockList :: Ext2FS -> BlockIndex -> IO [BlockIndex]
+readBlockAsBlockList fs b = runGet binGet <$> readBlock (bdev fs) b
+  where binGet = replicateM ((fromIntegral $ fsblockSize fs) `div` 4) (fromIntegral <$> getWord32le)
+
+readBlockList :: Ext2FS -> Inode -> IO [BlockIndex]
+readBlockList fs ino = do
+  tripples <- readTrippleIndirects fs (iIndirectBlock ino)
+  doubles <- readDoubleIndirects fs (iDoubleIndirBlock ino)
+  singles <- readIndirects fs (iTrippleIndirBlock ino)
+  return $ takeWhile (/= 0) $ iHeadBlocks ino ++ singles ++ doubles ++ tripples
+  where
+    readIndirects fs 0 =    return []
+    readIndirects fs blk =  readBlockAsBlockList fs blk
+
+    readDoubleIndirects fs 0 = return []
+    readDoubleIndirects fs blk =
+      concat <$> (join $ mapM (readIndirects fs) <$> readIndirects fs blk)
+
+    readTrippleIndirects fs 0 = return []
+    readTrippleIndirects fs blk =
+      concat <$> (join $ mapM (readDoubleIndirects fs) <$> readIndirects fs blk)
+
+readBlocks :: Ext2FS -> [BlockIndex] -> IO B.ByteString
+readBlocks fs [] = return B.empty
+readBlocks fs (b:bs) = B.append <$> readBlock (bdev fs) b <*> readBlocks fs bs
+
+
+readDirEntries :: Ext2FS -> Inode -> IO [DirEntry]
 readDirEntries fs ino = do
--}
+  blocks <- readBlockList fs ino
+  contents <- readBlocks fs blocks
+  return $ runGet getDirEntries contents
