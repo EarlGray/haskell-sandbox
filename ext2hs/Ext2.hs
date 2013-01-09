@@ -40,6 +40,8 @@ getByteList :: Int -> Get [Word8]
 --getByteList n = BI.unpackBytes <$> getBytes n
 getByteList n = BS.unpack <$> getByteString n
 
+showByteList = show . BS.pack . takeWhile (/= 0)
+
 putByteList :: [Word8] -> Put
 --putByteList = putByteString . BI.packBytes
 putByteList = putByteString . BS.pack
@@ -284,8 +286,8 @@ binGetSbDynRev = do
   ftCompat <- get;   ftIncompat <- get;   ftROCompat <- get
   uuid <- get
   -- read and trim C strings:
-  label  <- (show . takeWhile (/=0)) <$> getByteList 16
-  lstmnt <- (show . takeWhile (/=0)) <$> getByteList 64
+  label  <- showByteList <$> getByteList 16
+  lstmnt <- showByteList <$> getByteList 64
   algo <- getWord32le
   return SbDynRev {
     sFirstIno = fstIno,         sBlockGroupNr = blkgr,
@@ -450,7 +452,7 @@ binGetDirEntry = do
     deInode = fromIntegral ino,
     deRecSize = recsz,
     deFileType = ftype,
-    deName = show . B.pack . take (fromIntegral namelen) $ namestr  -- TODO : this shows the list, not the string
+    deName = showByteList namestr
   }
 
 getDirEntries :: Get [DirEntry]
