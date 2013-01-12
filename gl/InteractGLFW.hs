@@ -73,7 +73,6 @@ main = do
   }
 
   GL.depthFunc $= Just GL.Less
-  GLFW.setWindowSizeCallback cbResize
 
   chan <- newTChanIO :: IO (TChan StateChange)
 
@@ -105,7 +104,7 @@ handleEvents chan world = do
     msg <- atomically $ readTChan chan
     print msg
     hFlush stdout
-    return $ case msg of
+    handleEvents chan $ case msg of
       Move (fwd,side) -> moveView (fwd,side) world
       Look angUD -> turnViewUD angUD world
       Turn angRL -> turnViewRL angRL world
@@ -181,9 +180,3 @@ cbKey chan key action = do
     Just act -> atomically $ writeTChan chan act
     _ -> return ()
 
-cbResize w h = do
-  GL.viewport $= (GL.Position 0 0, GL.Size (int w) (int h))
-  GL.matrixMode $= GL.Projection
-  GL.loadIdentity
-  GL.perspective 45 (int w / int h) 1 100
-  GL.matrixMode $= GL.Modelview 0
