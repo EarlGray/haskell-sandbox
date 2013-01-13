@@ -10,6 +10,8 @@ import qualified Graphics.Rendering.OpenGL.GLU as GLU
 import qualified Graphics.UI.GLFW as GLFW
 
 import System.IO
+import System.Exit
+import Text.Printf
 import GHC.Float
 
 type Distance = GL.GLfloat
@@ -76,8 +78,14 @@ main = do
 
   chan <- newTChanIO :: IO (TChan StateChange)
 
+  hwAccel <- GLFW.windowIsHardwareAccelerated
+  putStrLn $ "window is " ++ (if hwAccel then "" else "not ") ++ "hardware accelerated"
+
   GLFW.setKeyCallback (cbKey chan)
   GLFW.setCharCallback (cbChar chan)
+  GLFW.setWindowCloseCallback cbClose
+
+  GLFW.enableKeyRepeat
 
   let initworld = WorldState { posX = 0, posY = 0, angRL = (-pi)/4, angUD = 0, isDoomed = False }
   (mainLoop initworld chan) `finally` quit
@@ -102,8 +110,7 @@ handleEvents chan world = do
   if emptyChan then return world
   else do
     msg <- atomically $ readTChan chan
-    print msg
-    hFlush stdout
+    print msg >> hFlush stdout   -- debug
     handleEvents chan $ case msg of
       Move (fwd,side) -> moveView (fwd,side) world
       Look angUD -> turnViewUD angUD world
@@ -125,7 +132,9 @@ draw world = do
   GL.loadIdentity
   let ang = angRL world
       eye = glVertex3d (flt $ posX world, flt $ posY world, 1.8)
-      at = glVertex3d (flt $ posX world + cos ang, flt $ posY world - sin ang, flt $ 1.8 + sin (angUD world))
+      at = glVertex3d (flt $ posX world + cos ang, 
+                       flt $ posY world - sin ang,
+                       flt $ 1.8 + sin (angUD world))
       up = glVector3d (0, 0, 1)
   GL.lookAt eye at up
 
@@ -133,7 +142,7 @@ draw world = do
       let a = 20.0
       forM_ [(0,0), (a,0), (a,a), (0,a)] $ \(x, y) ->
           let vtx = glVertex3f (x,y,0)
-              col = glColor4f (0,1,0,1)
+              col = glColor4f (x/a, 1.0 ,y/a, 1.0)
           in GL.color col >> GL.vertex vtx
 
   printErrors
@@ -146,8 +155,8 @@ quit = GLFW.closeWindow >> GLFW.terminate
 
 moveView (fwd,aside) w =
     w { posX = dX + posX w, posY = dY + posY w }
-  where dX = fwd * cos ang -- - aside * cos (ang - pi/2)
-        dY = (-fwd) * sin ang -- + aside * sin (ang - pi/2)
+  where dX = fwd * cos ang - aside * cos (ang - pi/2)
+        dY = (-fwd) * sin ang + aside * sin (ang - pi/2)
         ang = angRL w
 
 turnViewUD ang w = w { angUD = ang'' }
@@ -165,6 +174,8 @@ turnViewRL ang w = w { angRL = ang'' }
 cbChar chan c action = do
   let step = 0.5
   let cacts = [ ('w', Move (step,0)), ('s', Move ((-step),0)) ]
+  putStrLn $ printf "%c is %s" c (if action then "pressed" else "released") 
+  hFlush stdout
   case lookup c cacts of
     Just act -> atomically $ writeTChan chan act
     _ -> return ()
@@ -180,3 +191,8 @@ cbKey chan key action = do
     Just act -> atomically $ writeTChan chan act
     _ -> return ()
 
+cbResize w h = do
+  GL.viewport $= (GL.Position 0 0, GL.Size (int w) (int h))
+  GL.clear [GL.ColorBuffer, GL.DepthBuffer]
+
+cbClose = GLFW.closeWindow >> GLFW.terminate >> exitSuccess
