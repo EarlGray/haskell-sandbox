@@ -1,6 +1,5 @@
 module Ext2 where
 
-
 import Data.Int
 import Data.Word
 import Data.Bits
@@ -15,9 +14,11 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Internal as BI
 
 import System.IO
+import qualified System.IO.Strict as SIO
 import Text.Printf
-import Control.Applicative ((<$>), (<*), liftA2)
-import Control.Monad (replicateM)
+import Control.Applicative ((<$>), (<*), (<*>), liftA2)
+import Control.Monad (join, replicateM, msum)
+
 
 type U32 = Word32
 type U16 = Word16
@@ -28,29 +29,41 @@ type S8 = Int8
 
 type Error = String
 
+type BlockIndex = Word
+type InodeIndex = Word
+
+----- Shortcuts -----
+a = undefined
+
+int :: (Integral a, Num b) => a -> b
 int = fromIntegral
 
 ------- Binary helpers -----
 getByteList :: Int -> Get [Word8]
---getByteList n = BI.unpackBytes <$> getBytes n
 getByteList n = BS.unpack <$> getByteString n
 
+dequote = init . drop 1     -- TODO: make it safe
+showByteList = dequote . show . BS.pack . takeWhile (/= 0)
+
 putByteList :: [Word8] -> Put
---putByteList = putByteString . BI.packBytes
 putByteList = putByteString . BS.pack
 
+type Size = Word  -- may be Word64
+
 class SizeOfAble a where
-  sizeOf :: SizeOfAble a => a -> Word
+  sizeOf :: SizeOfAble a => a -> Size
+
+  minSizeOf :: SizeOfAble a => a -> Size
+  minSizeOf = sizeOf
 
 data UnixTimestamp = UnixTime { unixSeconds :: U32 } deriving Show
 
 data FileMode = FileMode { fmode :: U16 }
 
 instance Show FileMode where
- show (FileMode mode) = t : rights
+  show (FileMode mode) = t : rights
     where t = fromJust $ lookup (mode `shiftR` 12) $ zip [1, 2, 4, 6, 8, 0xa, 0xc] "pcdb-ls"
           rights = zipWith (\c f -> if f then c else '-') "rwxrwxwx" $ map (testBit mode) [8,7..0]
-
 
 ------- UUID ----
 
@@ -89,14 +102,13 @@ data FileBlkDev = FileBlkDev {
     blksz :: Word
 } deriving (Show)
 
-type BlockIndex = Word
 
 instance BlockDevice FileBlkDev where
     blockSize = blksz
 
     readBlock bdev index =
         readBytes bdev ((toInteger index) * (toInteger blksz), blksz)
-        where blksz = fromIntegral $ blockSize bdev
+        where blksz = int $ blockSize bdev
 
     readBytes bdev (at,count) =
         hSeek h AbsoluteSeek at >> B.hGet h count
@@ -208,7 +220,7 @@ data Superblock = Superblock {
   sJournaling :: Maybe SbJournaling
 } deriving (Show)
 
-binGetSuperblock = do
+bgetSuperblock = do
   uint13  <- replicateM 13   getWord32le
   ushort6 <- replicateM 6    getWord16le
   uint4   <- replicateM 4    getWord32le
@@ -236,7 +248,7 @@ binGetSuperblock = do
   }
 
 instance Binary Superblock where
-  get = binGetSuperblock
+  get = bgetSuperblock
   put = fail "TODO"
 
 instance SizeOfAble Superblock where sizeOf _ = 1024
@@ -273,14 +285,14 @@ data SbJournaling = SbJournaling {
     sFirstMetaBlockGr   :: U32
 } deriving (Show)
 
-binGetSbDynRev = do
+bgetSbDynRev = do
   fstIno <- getWord32le
   [inosz, blkgr] <- replicateM 2 getWord16le
   ftCompat <- get;   ftIncompat <- get;   ftROCompat <- get
   uuid <- get
   -- read and trim C strings:
-  label  <- (show . takeWhile (/=0)) <$> getByteList 16
-  lstmnt <- (show . takeWhile (/=0)) <$> getByteList 64
+  label  <- showByteList <$> getByteList 16
+  lstmnt <- showByteList <$> getByteList 64
   algo <- getWord32le
   return SbDynRev {
     sFirstIno = fstIno,         sBlockGroupNr = blkgr,
@@ -292,15 +304,15 @@ binGetSbDynRev = do
   }
 
 instance Binary SbDynRev where
-  get = binGetSbDynRev
+  get = bgetSbDynRev
   put = fail "TODO"
 
-binGetSbPrealloc = liftA2 SbPrealloc getWord8 getWord8 <* skip 2
+bgetSbPrealloc = liftA2 SbPrealloc getWord8 getWord8 <* skip 2
 instance Binary SbPrealloc where
-  get = binGetSbPrealloc
+  get = bgetSbPrealloc
   put = fail "TODO"
 
-binGetSbJournaling = do
+bgetSbJournaling = do
   juuid <- get
   [jno, jdevno, jlstorph] <- replicateM 3 getWord32le
   jhash <- replicateM 4 getWord32le
@@ -313,13 +325,13 @@ binGetSbJournaling = do
  }
 
 instance Binary SbJournaling where
-  get = binGetSbJournaling
+  get = bgetSbJournaling
   put = fail "TODO"
 
-readSuperblock :: B.ByteString -> Either Superblock Error
-readSuperblock bs = flip runGet bs $ do
+getSuperblock :: B.ByteString -> Either Superblock Error
+getSuperblock bs = flip runGet bs $ do
   sb <- get
-  let magic = fromIntegral $ sMagic sb
+  let magic = int $ sMagic sb
   if magic /= sbMagic
   then return $ Right ("Wrong Ext2 magic : " ++ show magic)
   else if fst (sRevLevel sb) == 0
@@ -349,14 +361,14 @@ data BlockGroupDescriptor = BlockGroupDescriptor {
   bgUsedDirsCount :: U16
 } deriving (Show)
 
-binGetBlkGrDescr = do
+bgetBlkGrDescr = do
   bitmaps <- replicateM 3  getWord32le
   counts <- replicateM 3 getWord16le
   skip 14
   return BlockGroupDescriptor {
-    bgBlockBitmap = fromIntegral (bitmaps!!0),
-    bgInodeBitmap = fromIntegral (bitmaps!!1),
-    bgInodeTable = fromIntegral (bitmaps!!2),
+    bgBlockBitmap = int (bitmaps!!0),
+    bgInodeBitmap = int (bitmaps!!1),
+    bgInodeTable = int (bitmaps!!2),
 
     bgFreeBlocksCount = counts!!0,
     bgFreeInodesCount = counts!!1,
@@ -366,10 +378,12 @@ binGetBlkGrDescr = do
 instance SizeOfAble BlockGroupDescriptor where sizeOf _ = 32
 
 instance Binary BlockGroupDescriptor where
-  get = binGetBlkGrDescr
+  get = bgetBlkGrDescr
   put = fail "TODO"
 
 ---- Inode structure -----
+
+directBlocksCount = 12
 
 data Inode = Inode {
   iMode :: FileMode,
@@ -389,20 +403,164 @@ data Inode = Inode {
   iTrippleIndirBlock :: BlockIndex
 } deriving (Show)
 
+instance Binary Inode where
+  get = bgetInode
+  put = fail "TODO"
+
+bgetInode = do
+  mode <- FileMode <$> getWord16le
+  uid <- getWord16le
+  size <- getWord32le
+  atime <- UnixTime <$> getWord32le
+  ctime <- UnixTime <$> getWord32le
+  mtime <- UnixTime <$> getWord32le
+  dtime <- UnixTime <$> getWord32le
+  gid <- getWord16le
+  nlinks <- getWord16le
+  nblocks <- getWord32le
+  flags <- getWord32le
+  getWord32le -- osd1
+  hdblocks <- replicateM directBlocksCount getWord32le
+  ind1b <- getWord32le
+  ind2b <- getWord32le
+  ind3b <- getWord32le
+  return Inode {
+    iMode = mode, iUID = uid, iSize = size,
+    iAccessTime = atime, iCreatTime = ctime, iModifTime = mtime, iDeletTime = dtime,
+    iGID = gid,  iLinksCount = nlinks,  iBlocksCount = nblocks, iFlags = flags,
+    iHeadBlocks = map int hdblocks,
+    iIndirectBlock = int ind1b,
+    iDoubleIndirBlock = int ind2b,
+    iTrippleIndirBlock = int ind3b }
+
+---- Directory entity structure ----
+data DirEntry = DirEntry {
+  deInode :: InodeIndex,
+  deRecSize :: U16,
+  deFileType :: U8,
+  deName :: String
+} deriving (Show)
+
+instance Binary DirEntry where
+  get = bgetDirEntry
+  put = fail "TODO"
+
+instance SizeOfAble DirEntry where
+  minSizeOf _ = 8
+  sizeOf de = int $ deRecSize de
+
+bgetDirEntry = do
+  ino <- getWord32le
+  recsz <- getWord16le
+  namelen <- getWord8
+  ftype <- getWord8
+  namestr <- getByteList $ int (int recsz - minSizeOf (a::DirEntry))
+  return DirEntry {
+    deInode = int ino,
+    deRecSize = recsz,
+    deFileType = ftype,
+    deName = showByteList $ take (int namelen) namestr
+  }
+
+getDirEntries :: Get [DirEntry]
+getDirEntries = do
+  bytesRemained <- int <$> remaining
+  if bytesRemained < minSizeOf (a::DirEntry)
+  then return []
+  else do
+    de <- bgetDirEntry
+    if deInode de /= 0
+    then (de:) <$> getDirEntries
+    else return []
+
 
 ---- Ext2FS structure -----
 
 data Ext2FS = Ext2FS {
   super :: Superblock,
+  bgds :: [BlockGroupDescriptor],
   bdev :: FileBlkDev
 }
 
+instance BlockDevice Ext2FS where
+  readBytes fs = readBytes (bdev fs)
+  readBlock fs = readBlock (bdev fs)
+  blockSize = fsblockSize
+
 fsblockSize :: Ext2FS -> Word
-fsblockSize (Ext2FS sb _) = 1024 `shiftL` (fromIntegral $ sLogBlockSize sb)
+fsblockSize fs = 1024 `shiftL` (int $ sLogBlockSize $ super fs)
 
 fsInoSize :: Ext2FS -> U16
-fsInoSize (Ext2FS sb _) = fromMaybe defInoSize (sInodeSize <$> sDynRev sb)
+fsInoSize fs = fromMaybe defInoSize (sInodeSize <$> (sDynRev $ super fs))
 
-readBlkGrTable :: Int -> B.ByteString -> [BlockGroupDescriptor]
-readBlkGrTable nr = runGet $ replicateM nr get
+getBlockGroupTable :: Int -> B.ByteString -> [BlockGroupDescriptor]
+getBlockGroupTable nr = runGet $ replicateM nr get
 
+-----
+readSuperblock :: BlockDevice b => b -> IO (Either Superblock Error)
+readSuperblock bdev = getSuperblock <$> readBytes bdev (sbOffset, sbSize)
+
+readBlockGroupTable :: BlockDevice b => b -> Superblock -> IO [BlockGroupDescriptor]
+readBlockGroupTable bdev sb = getBlockGroupTable nblkgr <$> readBlock bdev blkno
+  where (n', rest') = (sBlocksCount sb) `divMod` (sBlocksPerGroup sb)
+        nblkgr = int $ n' + if rest' == 0 then 0 else 1
+        blkno = int $ (sFirstDataBlock sb) + 1
+
+readInode :: Ext2FS -> InodeIndex -> IO Inode
+readInode fs ino = decode <$> readBytes (bdev fs) (inoOffset, int inosz)
+  where (bgNo, bgInd) = (ino - 1) `divMod` (int $ sInodesPerGroup $ super fs)
+        inosz = int $ fsInoSize fs
+        blksz = int $ fsblockSize fs
+        inoTableStart = bgInodeTable $ bgds fs !! int bgNo
+        fstBlock = int $ sFirstDataBlock (super fs)
+        inoOffset = toInteger $ blksz * (inoTableStart) + inosz * int bgInd
+
+readBlockAsBlockList :: Ext2FS -> BlockIndex -> IO [BlockIndex]
+readBlockAsBlockList fs b = runGet bget <$> readBlock (bdev fs) b
+  where bget = do
+          remained <- remaining
+          replicateM ((int remained) `div` 4) (int <$> getWord32le)
+
+readBlockList :: Ext2FS -> Inode -> IO [BlockIndex]
+readBlockList fs ino = do
+  tripples <- readTrippleIndirects fs (iIndirectBlock ino)
+  doubles <- readDoubleIndirects fs (iDoubleIndirBlock ino)
+  singles <- readIndirects fs (iTrippleIndirBlock ino)
+  return $ takeWhile (/= 0) $ iHeadBlocks ino ++ singles ++ doubles ++ tripples
+  where
+    readIndirects fs 0 =    return []
+    readIndirects fs blk =  readBlockAsBlockList fs blk
+
+    readDoubleIndirects fs 0 = return []
+    readDoubleIndirects fs blk =
+      concat <$> (join $ mapM (readIndirects fs) . takeWhile (/=0) <$> readIndirects fs blk)
+
+    readTrippleIndirects fs 0 = return []
+    readTrippleIndirects fs blk =
+      concat <$> (join $ mapM (readDoubleIndirects fs) <$> readIndirects fs blk)
+
+readBlocks :: Ext2FS -> [BlockIndex] -> IO B.ByteString
+readBlocks fs [] = return B.empty
+readBlocks fs (b:bs) = B.append <$> readBlock (bdev fs) b <*> readBlocks fs bs
+
+
+readDirEntries :: Ext2FS -> Inode -> IO [DirEntry]
+readDirEntries fs ino = do
+  blocks <- readBlockList fs ino
+  contents <- readBlocks fs blocks
+  return $ runGet getDirEntries contents
+
+openExt2Image :: FilePath -> IO (Either Ext2FS Error)
+openExt2Image fname = do
+  h <- openBinaryFile fname ReadMode
+  let bd = FileBlkDev h 1024
+  sbbs <- readBytes bd (sbOffset,sbSize)
+  case getSuperblock sbbs of
+    Right err -> return $ Right err
+    Left sb -> do
+      bgdt <- readBlockGroupTable bd sb
+      return $ Left $ Ext2FS sb bgdt bd
+
+---- debug
+lstype ft = fromMaybe '?' $ lookup ft $ zip [0,1..] "?-dcbpsl"
+lsdir fs ino = readDirEntries fs ino >>= mapM_ (\(DirEntry ino _ ft name) -> printf "%d\t%c\t%s\n" ino (lstype ft) name)
