@@ -7,15 +7,6 @@ data AVLTree a = AVLEmpty
     } 
     deriving (Show)
 
--- if tree nodes are not a single value and inserting a node may affect others, 
---  we need to change others with mutator'
-insertMutating :: Ord a => (a -> a) -> a -> AVLTree a -> AVLTree a
-insertMutating mutor val AVLEmpty = AVLBranch (mutor val) AVLEmpty AVLEmpty
-insertMutating mutor val (AVLBranch root l r) | val < root = 
-    AVLBranch (mutor root) (insertMutating mutor val l) (insertMutating mutor val r)
-insertMutating mutor val (AVLBranch root l r) | val > root = 
-    AVLBranch (mutor root) (insertMutating mutor val l) (insertMutating mutor val r)
-
 insert :: (Ord a) => a -> AVLTree a -> AVLTree a
 insert = insertMutating id
 
