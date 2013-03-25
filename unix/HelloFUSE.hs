@@ -18,6 +18,9 @@ import Numeric (showOct)
 
 import qualified Data.ByteString.UTF8 as B
 
+int :: (Integral a, Num b) => a -> b
+int = fromIntegral
+
 data HT = HT ()
 
 helloFUSE :: FuseOperations HT
@@ -54,7 +57,7 @@ fileattrs = [
     ("/",       FileStat Directory   (CMode 0o755) 1 (CUid 0) (CGid 0) (CDev 0) 512 1 0 0 0),
     (hello,     FileStat RegularFile (CMode 0o644) 1
                          (CUid 0) (CGid 0) (CDev 0)
-                         (fromIntegral $ B.length greetings) 1  0 0 0)]
+                         (int $ B.length greetings) 1  0 0 0)]
 
 
 hfuseInit = putStrLn "hfuseInit" >> hFlush stdout
@@ -88,8 +91,9 @@ hfuseOpenDir dirpath = do
 hfuseReadDir :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
 hfuseReadDir dirpath = do
     putStrLn $ "### READDIR (" ++ dirpath ++ ")"
-    uid <- getRealUserID
-    gid <- getRealGroupID
+    ctx <- getFuseContext
+    let uid = fuseCtxUserID ctx
+    let gid = fuseCtxGroupID ctx
     time <- epochTime
     let mkFName (fname,info) | fname == dirpath = Just (".",info)
                              | otherwise = (flip (,) info) `fmap` stripPrefix dirpath fname
@@ -110,7 +114,7 @@ hfuseOpen _ _ _ = return $ Left eNOENT
 hfuseRead :: FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
 hfuseRead path _ byteCount offset
     | path == hello =
-        return $ Right $ B.take (fromIntegral byteCount) $ B.drop (fromIntegral offset) greetings
+        return $ Right $ B.take (int byteCount) $ B.drop (int offset) greetings
     | otherwise = return $ Left eNOENT
 
 handleExeption :: SomeException -> IO Errno
