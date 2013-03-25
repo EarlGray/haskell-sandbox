@@ -1,10 +1,10 @@
 import qualified Data.Set as S 
 import qualified Data.Map as M
-import Data.Map ((!))
-import Data.List hiding (map)
+import Data.List (intercalate)
 import Data.Maybe (fromJust, maybe)
 import Data.Either (either)
 import Control.Arrow (right)
+import Debug.Trace
 
 type Figure = Int
 type Position = (Int,Int)
@@ -29,18 +29,13 @@ defaultSudoku = (readSudoku . unlines . drop 2 . lines) `fmap` readFile "default
 
 ------------------
 
-onLine li (_,i) = i == li
-onColumn lj (j,_) = j == lj
-onSquare (lj,li) (j,i) = modEq 3 i li && modEq 3 j lj
-  where modEq n a b = a`div`n == b`div`n
+onLine li (_,i)         = i == li
+onColumn lj (j,_)       = j == lj
+onSquare (lj,li) (j,i)  = modEq 3 i li && modEq 3 j lj
+                            where modEq n a b = a`div`n == b`div`n
 
-sudokuLine :: Int -> Sudoku -> Region
 sudokuLine i       = M.filterWithKey (\k _ -> onLine i k)
-
-sudokuColumn :: Int -> Sudoku -> Region
 sudokuColumn j     = M.filterWithKey (\k _ -> onColumn j k)
-
-sudokuSquare :: Position -> Sudoku -> Region
 sudokuSquare (j,i) = M.filterWithKey (\k _ -> onSquare (j,i) k)
 
 reduceByCellValue :: Figure -> Position -> Sudoku -> Sudoku
@@ -86,4 +81,4 @@ resolveReduces s = if s == s1 then s else resolveReduces s1
   where s1 = singleForCell $ reduceSudoku s
 
 resolveSingles s = if s == s1 then s else resolveSingles s1
-  where s1 = allSingles $ resolveReduces s
+  where s1 = allSingles $ reduceSudoku $ trace (prettySudoku (show. S.toList) "\t" s) s
