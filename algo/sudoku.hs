@@ -4,6 +4,7 @@ import Data.List (intercalate)
 import Data.Maybe (fromJust, maybe)
 import Data.Either (either)
 import Control.Arrow (right)
+import System.Environment (getArgs)
 import Debug.Trace
 
 type Figure = Int
@@ -23,8 +24,8 @@ prettySudoku :: (Possibilities -> String) -> String -> Sudoku -> String
 prettySudoku rt sep s = unlines [ prettyLine i | i <- [0..8] ]
   where prettyLine i = intercalate sep [ showCell (j,i) | j <- [0..8] ]
         showCell pos = maybe "?" (either show rt) (M.lookup pos s)
-pretty' = putStrLn . prettySudoku (show . S.toList) "\t"
-pretty = putStrLn . prettySudoku (const "0") " "
+pretty' = prettySudoku (show . S.toList) "\t"
+pretty = prettySudoku (const "0") " "
 defaultSudoku = (readSudoku . unlines . drop 2 . lines) `fmap` readFile "default.sudoku"
 
 ------------------
@@ -39,7 +40,7 @@ sudokuColumn j     = M.filterWithKey (\k _ -> onColumn j k)
 sudokuSquare (j,i) = M.filterWithKey (\k _ -> onSquare (j,i) k)
 
 reduceByCellValue :: Figure -> Position -> Sudoku -> Sudoku
-reduceByCellValue n (j,i) s = M.mapWithKey reduce s
+reduceByCellValue n (j,i) s = s `seq` M.mapWithKey reduce s
   where reduce p | onLine i p || onColumn j p || onSquare (j,i) p = right (S.delete n)
         reduce p = id
 
@@ -50,6 +51,9 @@ reduceSudoku s = M.foldlWithKey reduce s s
 singleForCell s = M.mapWithKey intro $ reduceSudoku s
   where intro k (Right ps) | S.size ps == 1 = Left . head . S.elems $ ps
         intro k c = c
+
+resolveSingles s = if s == s1 then s else resolveSingles s1
+  where s1 = reduceSudoku $ singleForCell s
 
 type RegionStat = M.Map Int (Int, Position) -- Map Possibility (Count FirstPosition)
 
@@ -62,23 +66,25 @@ statistics s = M.foldlWithKey upd M.empty s
         upd stat pos _ = stat
 
 singlePossibilities :: Region -> Region
-singlePossibilities s = M.foldWithKey forEach s stat
+singlePossibilities s = s `seq` M.foldWithKey forEach s stat
   where stat = M.filter ((== 1).fst) $ statistics s -- must be only one in the region
         forEach p (_, pos) s = M.insert pos (Left p) s
 
 singlesForRegion :: (Position -> Bool) -> Sudoku -> Sudoku
 singlesForRegion isreg s = M.union outer $ singlePossibilities inner
-  where (inner, outer) = M.partitionWithKey (\k _ -> isreg k) s
+  where (inner, outer) = M.partitionWithKey (\k _ -> isreg k) $ s `seq` resolveSingles s
 
 regions = [ onLine i | i <- [0..8] ] ++ [ onColumn j | j <- [0..8] ] ++
           [ onSquare (3*i,3*j) | i <- [0..2], j <- [0..2] ]
+
 allSingles s = foldr singlesForRegion s regions
 
-allSolved :: Sudoku -> Bool
-allSolved s = M.null $ snd $ M.partition (\a -> case a of { Left _ -> True; _ -> False; }) s
+allSolved s = M.null $ snd $ M.partition (either (const True) (const False)) s
 
-resolveReduces s = if s == s1 then s else resolveReduces s1
-  where s1 = singleForCell $ reduceSudoku s
+resolve s = if s == s1 then s else resolve s1
+  where s1 = allSingles s
 
-resolveSingles s = if s == s1 then s else resolveSingles s1
-  where s1 = allSingles $ reduceSudoku $ trace (prettySudoku (show. S.toList) "\t" s) s
+main = do
+    file <- head `fmap` getArgs >>= readFile
+    let tf = unlines . drop 2 . lines $ file
+    putStrLn . pretty . resolve . readSudoku $ tf
