@@ -1,4 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
+module BubbleSort (
+  bubblesort, bubblesortA
+) where
 
 import Control.Arrow (first)
 import Control.Monad
@@ -8,16 +11,7 @@ import Data.Array.ST as STA
 import Data.Array.Base (unsafeRead, unsafeWrite)
 import Data.Array.Unboxed
 
-import System.Random
-
 type Item = Int
-
-randomList :: Int -> IO [Item]
-randomList n = replicateM n (randomRIO(1,1000000))
-
-randomArray :: Int -> IO (UArray Int Int)
-randomArray n = mkArray `fmap` randomList n
-  where mkArray xs = listArray (0, length xs - 1) xs
 
 {-| List sort |-}
 bubblesort :: Ord a => [a] -> [a]
@@ -59,16 +53,3 @@ bblsort' a = do
   inds <- getBounds a
   forM_ (range inds) $ \_ -> bbliter a
 
-{-- test --}
-
-main :: IO ()
-main = do
-    putStrLn "List bubblesort:"
-    list <- randomList 25
-    print list
-    print $ bubblesort list
-
-    putStrLn "Array bubblesort:"
-    arr <- randomArray 25
-    print (elems arr)
-    print $ elems $ bubblesortA arr

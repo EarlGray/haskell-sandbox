@@ -1,6 +1,28 @@
+module QuickSort (
+  quicksortA
+) where
+
 import Data.Array.Base (unsafeRead, unfaseWrite)
 import Data.Array.ST
 import Control.Monad.ST
+
+quicksort [] = []
+quicksort (x:xs) = quicksort (filter (<x) xs) ++ [x] ++ quicksort (filter (>x) xs)
+
+ 
+part :: (a -> Bool) -> [a] -> ([a], [a])
+part p xs = part' xs ([],[])
+ where part' [] (lxs, rxs) = (lxs, rxs)
+       part' (x:xs) (lxs,rxs) | p x = part' xs (x:lxs, rxs)
+       part' (x:xs) (lxs,rxs) = part' xs (lxs, x:rxs)
+
+quicksort' [] = []
+quicksort' (x:xs) = quicksort' lt ++ [x] ++ quicksort' gt
+    where (lt, gt) = part (<x) xs
+
+qs2 [] = []
+qs2 (x:xs) = case part (<x) xs of
+                (lt, gt) -> qs2 lt ++ [x] ++ qs2 gt
 
 {-
  -  http://www.mail-archive.com/haskell-cafe%40haskell.org/msg63381.html
