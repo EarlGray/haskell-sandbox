@@ -12,11 +12,11 @@ import System.Random
 
 type Item = Int
 
-rndAlloc :: Int -> IO [Item]
-rndAlloc n = replicateM n (randomRIO(1,1000000))
+randomList :: Int -> IO [Item]
+randomList n = replicateM n (randomRIO(1,1000000))
 
-rndArray :: Int -> IO (UArray Int Int)
-rndArray n = mkArray `fmap` rndAlloc n
+randomArray :: Int -> IO (UArray Int Int)
+randomArray n = mkArray `fmap` randomList n
   where mkArray xs = listArray (0, length xs - 1) xs
 
 {-| List sort |-}
@@ -64,11 +64,11 @@ bblsort' a = do
 main :: IO ()
 main = do
     putStrLn "List bubblesort:"
-    list <- rndAlloc 25
+    list <- randomList 25
     print list
     print $ bubblesort list
 
     putStrLn "Array bubblesort:"
-    arr <- rndArray 25
+    arr <- randomArray 25
     print (elems arr)
     print $ elems $ bubblesortA arr
