@@ -1,14 +1,14 @@
 module Main where
 
+import SortingCommon
 import QuickSort
 import BubbleSort
 import MergeSort
 
 import System.Random
 import Control.Monad (replicateM)
-import Data.Array 
 
-randomList :: Int -> IO [Item]
+randomList :: Int -> IO [Int]
 randomList n = replicateM n (randomRIO(1,1000000))
 
 randomArray :: Int -> IO (UArray Int Int)

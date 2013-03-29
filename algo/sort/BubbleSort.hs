@@ -3,13 +3,8 @@ module BubbleSort (
   bubblesort, bubblesortA
 ) where
 
+import SortingCommon
 import Control.Arrow (first)
-import Control.Monad
-import Control.Monad.ST
-
-import Data.Array.ST as STA
-import Data.Array.Base (unsafeRead, unsafeWrite)
-import Data.Array.Unboxed
 
 type Item = Int
 
@@ -32,12 +27,6 @@ bubblesortA a = runST $ do
   ma <- thaw a :: ST s (STUArray s Int Int)
   bblsort' ma
   freeze ma
-
-swap :: STUArray s Int Int -> Int -> Int -> ST s ()
-swap a i j = do
-  t <- unsafeRead a i
-  unsafeRead a j >>= unsafeWrite a i
-  unsafeWrite a j t
 
 bbliter :: STUArray s Int Int -> ST s ()
 bbliter a = do

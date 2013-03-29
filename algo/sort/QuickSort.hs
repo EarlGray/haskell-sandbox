@@ -1,10 +1,8 @@
 module QuickSort (
-  quicksortA
+  quicksort
 ) where
 
-import Data.Array.Base (unsafeRead, unfaseWrite)
-import Data.Array.ST
-import Control.Monad.ST
+import SortingCommon
 
 quicksort [] = []
 quicksort (x:xs) = quicksort (filter (<x) xs) ++ [x] ++ quicksort (filter (>x) xs)
@@ -26,7 +24,6 @@ qs2 (x:xs) = case part (<x) xs of
 
 {-
  -  http://www.mail-archive.com/haskell-cafe%40haskell.org/msg63381.html
- -}
 
 quicksortA :: STUArray s Int Int -> Int -> Int -> ST s ()
 quicksortA a lo hi 
@@ -58,3 +55,4 @@ quicksortA a lo hi
         quicksortA a (i + 1) hi
     | otherwise = return ()
             
+ -}
