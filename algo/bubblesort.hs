@@ -15,7 +15,7 @@ type Item = Int
 rndAlloc :: Int -> IO [Item]
 rndAlloc n = replicateM n (randomRIO(1,1000000))
 
-rndArray :: Int -> IO (Array Int Int)
+rndArray :: Int -> IO (UArray Int Int)
 rndArray n = mkArray `fmap` rndAlloc n
   where mkArray xs = listArray (0, length xs - 1) xs
 
@@ -59,6 +59,16 @@ bblsort' a = do
   inds <- getBounds a
   forM_ (range inds) $ \_ -> bbliter a
 
+{-- test --}
+
 main :: IO ()
 main = do
-    print =<< bubblesort `fmap` rndAlloc 25
+    putStrLn "List bubblesort:"
+    list <- rndAlloc 25
+    print list
+    print $ bubblesort list
+
+    putStrLn "Array bubblesort:"
+    arr <- rndArray 25
+    print (elems arr)
+    print $ elems $ bubblesortA arr
