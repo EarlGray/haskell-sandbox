@@ -5,8 +5,8 @@ import Control.Monad
 import Control.Monad.ST
 
 import Data.Array.ST as STA
+import Data.Array.Base (unsafeRead, unsafeWrite)
 import Data.Array.Unboxed
-import Data.Array.MArray as MA
 
 import System.Random
 
@@ -32,16 +32,32 @@ swapIter ((x1:x2:xs), swapped) = first (x1:) $ swapIter ((x2:xs), swapped)
 swapIter (xs, swapped) = (xs, swapped)
 
 
-{-| Array sort |-
-bubblesortA :: Array Int Int -> Array Int Int
+{-| Array sort |-}
+bubblesortA :: UArray Int Int -> UArray Int Int
 bubblesortA a = runST $ do
-  ma <- thaw a :: ST s (STArray s Int Int)
-  (sorted, False) <- bblsort' (ma, False)
-  freeze sorted
+  ma <- thaw a :: ST s (STUArray s Int Int)
+  bblsort' ma
+  freeze ma
 
-bblsort' :: STArray s Int Int -> ST s (STArray s Int Int, Bool)
-bblsort' (xs,swapped) = return xs
--- -}
+swap :: STUArray s Int Int -> Int -> Int -> ST s ()
+swap a i j = do
+  t <- unsafeRead a i
+  unsafeRead a j >>= unsafeWrite a i
+  unsafeWrite a j t
+
+bbliter :: STUArray s Int Int -> ST s ()
+bbliter a = do
+  inds <- getBounds a
+  forM_ (tail $ range inds) $ \i -> do
+    x <- unsafeRead a (i - 1)
+    y <- unsafeRead a i
+    if x > y then swap a (i - 1) i
+             else return ()
+
+bblsort' :: STUArray s Int Int -> ST s ()
+bblsort' a = do
+  inds <- getBounds a
+  forM_ (range inds) $ \_ -> bbliter a
 
 main :: IO ()
 main = do
