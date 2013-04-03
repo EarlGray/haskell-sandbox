@@ -40,6 +40,7 @@ sorts = [
     ("select", selectsort) ]
 
 sortAs = [
+    ("quick", quicksortA),
     ("bubble", bubblesortA) ]
 
 readLst :: String -> [Int]

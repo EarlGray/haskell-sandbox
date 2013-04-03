@@ -1,8 +1,11 @@
 module QuickSort (
+  quicksortA,
   quicksort
 ) where
 
 import SortingCommon
+import Data.STRef
+import Data.Array.Unsafe as AU
 
 quicksort [] = []
 quicksort (x:xs) = quicksort (filter (<x) xs) ++ [x] ++ quicksort (filter (>x) xs)
@@ -21,6 +24,36 @@ quicksort' (x:xs) = quicksort' lt ++ [x] ++ quicksort' gt
 qs2 [] = []
 qs2 (x:xs) = case part (<x) xs of
                 (lt, gt) -> qs2 lt ++ [x] ++ qs2 gt
+
+quicksortA a = runST $ do
+    ma <- thaw a
+    quicksortAU ma
+    AU.unsafeFreeze ma
+
+quicksortAU :: STUArray s Int Int -> ST s ()
+quicksortAU a = do
+    (from, to) <- getBounds a
+    quicksortA' a from to
+
+quicksortA' a l r =
+    when (l < r) $ do
+      p <- part a l r l
+      quicksortA' a l (p-1)
+      quicksortA' a (p+1) r
+  where
+    part a l r p = do
+      pivot <- unsafeRead a p
+      swap a p r
+      sref <- newSTRef l
+      forM_ (range (l, r - 1)) $ \i -> do
+        ai <- unsafeRead a i
+        when (ai <= pivot) $ do
+          store <- readSTRef sref
+          swap a i store
+          writeSTRef sref (store + 1)
+      store <- readSTRef sref
+      swap a store r
+      return store
 
 {-
  -  http://www.mail-archive.com/haskell-cafe%40haskell.org/msg63381.html
