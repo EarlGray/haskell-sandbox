@@ -1,0 +1,16 @@
+body {
+    background-color: #aaf;
+}
+
+.main {
+    margin-left: 5%;
+    margin-right: 5%;
+    text-indent: 20px;
+    text-align: justify;
+}
+
+.error {
+    color: red;
+    text-align: center;
+    font-size: 140%;
+}
