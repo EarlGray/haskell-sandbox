@@ -4,12 +4,12 @@ module HPaste (
   hpaste
 ) where
 
-import Data.Text (Text, unpack, pack)
+import Data.Text (Text, unpack, pack, append)
 import qualified Data.Text.Lazy as TL
 import Data.Maybe
 import Data.Char (chr)
 import Control.Monad (msum, when, replicateM)
-import Control.Monad.Trans
+import Control.Monad.Trans (liftIO)
 import Control.Applicative ((<$>))
 import System.Random
 import System.Directory (doesFileExist, doesDirectoryExist, createDirectory)
@@ -77,7 +77,7 @@ postHPaste hp template = do
 
     ok $ template $ H.div $ do
                      H.h4 "HPasted!"; H.hr
-                     H.div $ ahref (pack url) (H.toHtml url)
+                     H.div $ ahref (pack $ (unpack hp) ++ "/" ++ url) (H.toHtml url)
 
 hpasteForm :: Text -> Html
 hpasteForm action = H.form ! A.id "hpaste" ! 

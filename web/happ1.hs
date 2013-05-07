@@ -99,7 +99,7 @@ myApp = msum [
     dir "form"      $ formPage,
     dir "fortune"   $ fortune,
     dir "files"     $ fileServing,
-    dir "hpaste"    $ hpaste "" (template "hpaste"),
+    dir "hpaste"    $ hpaste "/hpaste" (template "hpaste"),
     dir "upload"    $ upload,
     path $ \(msg :: String) ->
       if null msg
