@@ -7,11 +7,14 @@ import Data.Text (Text)
 import Data.Maybe (fromMaybe)
 
 import Happstack.Lite
+import Happstack.Server (dirs)
 
 import Text.Blaze.Html5 ((!), Html, toHtml)
 import Text.Blaze.Html5.Attributes (href)
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
+
+import HPaste
 
 template :: Text -> Html -> Response
 template title body = toResponse $ H.docTypeHtml $ 
@@ -96,11 +99,13 @@ myApp = msum [
     dir "form"      $ formPage,
     dir "fortune"   $ fortune,
     dir "files"     $ fileServing,
+    dir "hpaste"    $ hpaste "" (template "hpaste"),
     dir "upload"    $ upload,
     path $ \(msg :: String) ->
       if null msg
       then homePage
-      else page404 msg ]
+      else page404 msg,
+    dirs ""        $ homePage ]
 
 main :: IO ()
 main = do
