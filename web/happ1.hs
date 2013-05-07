@@ -2,12 +2,16 @@
 
 module Main where
 
+import Data.Text (pack)
+import qualified Data.Map as Map
+import Control.Monad (forM, forM_, join, sequence)
 import Control.Applicative ((<$>), optional)
 import Data.Text (Text)
 import Data.Maybe (fromMaybe)
 
 import Happstack.Lite
-import Happstack.Server (dirs)
+import Happstack.Server (dirs, Request(..), Response, HeaderPair(..))
+import qualified Happstack.Server as Srv
 
 import Text.Blaze.Html5 ((!), Html, toHtml)
 import Text.Blaze.Html5.Attributes (href)
@@ -43,6 +47,7 @@ homePage = ok $ template "home page" $ do
         H.li $ H.a ! href "/query?foo=bar"           $ "query parameters" 
         H.li $ H.a ! href "/form"                    $ "a form example"
         H.li $ H.a ! href "/fortune"                 $ "fortune cookies"
+        H.li $ H.a ! href "/you"                     $ "info about you"
         H.li $ H.a ! href "/files"                   $ "files serving"
         H.li $ H.a ! href "/upload"                  $ "files upload"
 
@@ -90,7 +95,20 @@ page404 :: String -> ServerPart Response
 page404 p = notFound $ template "page not found" $ do
     divclass "error" $ toHtml p
     divclass "error" $ "It looks like that page does not exist"
+
+prettyHeaders :: Srv.Headers -> [String]
+prettyHeaders hdrs = map (showHeader . snd)  $ Map.toList hdrs
+  where showHeader Srv.HeaderPair{ hName = name, hValue = val } = 
+            show name ++ ": " ++ show val 
   
+clientInfo :: ServerPart Response
+clientInfo = do
+    Request { rqPeer = (host, _), rqHeaders = hdrs } <- Srv.askRq
+    ok $ template "About you" $ H.div $ do 
+      H.p $ H.toHtml $ "Connection from " ++ show host
+      H.p $ do H.toHtml ("Headers: " :: String)
+               forM_ (prettyHeaders hdrs) $ \line -> do
+                  H.br ; H.toHtml line
 
 myApp :: ServerPart Response
 myApp = msum [
@@ -99,6 +117,7 @@ myApp = msum [
     dir "form"      $ formPage,
     dir "fortune"   $ fortune,
     dir "files"     $ fileServing,
+    dir "you"       $ clientInfo,
     dir "hpaste"    $ hpaste "/hpaste" (template "hpaste"),
     dir "upload"    $ upload,
     path $ \(msg :: String) ->

@@ -58,14 +58,17 @@ getHPaste :: Text -> String -> (Html -> Response) -> ServerPart Response
 getHPaste hp url template = do
     let fpath = combine dbDir url
     exists <- liftIO $ doesFileExist fpath
-    if (not exists) then
+    if (not exists) then do
+      liftIO $ putStrLn $ "GET failed: " ++ url
       notFound $ template $ htmlError "Paste not found"
     else do
       txt <- liftIO $ readFile fpath
+      liftIO $ putStrLn $ "GET: " ++ url
       ok $ template $ H.textarea ! A.readonly "1" ! A.rows "15" ! A.cols "80" $ toHtml $ pack txt
 
 listHPaste :: Text -> (Html -> Response) -> ServerPart Response
 listHPaste hp templ = do
+    liftIO $ putStrLn "LIST"
     ok $ templ $ H.h3 "------ TODO: list -----"
 
 postHPaste :: Text -> (Html -> Response) -> ServerPart Response
@@ -104,12 +107,14 @@ savePaste txt = do
       dbexists <- doesDirectoryExist dbDir
       when (not dbexists) $ createDirectory dbDir
       writeFile fpath (unpack txt)
+      liftIO $ putStrLn $ "POST: " ++ url
       return url
 
 randomURL :: IO String
 randomURL = map (abc !!) <$> (replicateM 8 $ randomRIO (0, length abc - 1))
     where abc = ['0'..'9'] ++ ['a'..'z'] ++ ['A'..'Z']
 
+{-
 loadPaste :: Text -> IO (Maybe Text)
 loadPaste url = do
     let fpath = combine dbDir (unpack url)
@@ -119,3 +124,4 @@ loadPaste url = do
     else do
       txt <- readFile fpath
       return $ Just $ pack txt
+ - -}
