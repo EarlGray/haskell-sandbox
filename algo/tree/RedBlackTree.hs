@@ -1,8 +1,8 @@
 module RBTree (
     RBTree(..), emptyRB,
     lookupBy, lookup, member,
-    insertBy, insert 
-) where 
+    insertBy, insert
+) where
 
 import Data.Maybe (isJust)
 import Prelude hiding (lookup)
@@ -12,7 +12,7 @@ data RB = Red | Black deriving (Show, Eq, Ord)
 data RBTree a = RBEmpty | RBNode RB a (RBTree a) (RBTree a)
                 deriving (Show, Eq, Ord)
 
-lookupBy :: Ord a => (a -> a -> Ordering) -> a -> RBTree a -> Maybe a
+lookupBy :: (a -> a -> Ordering) -> a -> RBTree a -> Maybe a
 lookupBy _ _ RBEmpty = Nothing
 lookupBy cmp v (RBNode _ n l r) =
     case cmp v n of
@@ -29,7 +29,7 @@ emptyRB = RBEmpty
 fromList :: Ord a => [a] -> RBTree a
 fromList = foldr insert RBEmpty
 
-insertBy :: Ord a => (a -> a -> Ordering) -> a -> RBTree a -> RBTree a
+insertBy :: (a -> a -> Ordering) -> a -> RBTree a -> RBTree a
 insertBy cmp v t = RBNode Black v' l' r'
   where (RBNode _ v' l' r') = insertBy' cmp v t
 
@@ -54,14 +54,14 @@ rebalance t = t
 insert :: Ord a => a -> RBTree a -> RBTree a
 insert = insertBy compare
 
-pretty :: (Show a, Ord a) => RBTree a -> [String]
+pretty :: (Show a) => RBTree a -> [String]
 pretty t = pretty' 0 t
   where pretty' ind (RBEmpty) = [ replicate ind ' ' ++ "-" ]
         pretty' ind (RBNode c n RBEmpty RBEmpty) = [ node ind c n ]
-        pretty' ind (RBNode c n l r) = [node ind c n] ++ lp ++ rp 
+        pretty' ind (RBNode c n l r) = [node ind c n] ++ lp ++ rp
           where lp = pretty' (ind+2) l
-                rp = pretty' (ind+2) r 
+                rp = pretty' (ind+2) r
         node ind c n = replicate ind ' ' ++ "+" ++ show c ++ " " ++ show n
 
-printRB :: (Ord a, Show a) => RBTree a -> IO ()
-printRB = mapM_ putStrLn . pretty 
+printRB :: (Show a) => RBTree a -> IO ()
+printRB = mapM_ putStrLn . pretty
