@@ -1,4 +1,4 @@
-#! /usr/bin/env ghc
+#!/usr/bin/env runhaskell
 
 data Tree a = Leaf a | Branch (Tree a) (Tree a)
 Branch      :: Tree a -> Tree a -> Tree a
