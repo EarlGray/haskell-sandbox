@@ -1,8 +1,8 @@
-module RBTree {-(
-    RBTree(..),
+module RBTree (
+    RBTree(..), emptyRB,
     lookupBy, lookup, member,
     insertBy, insert 
-)-} where 
+) where 
 
 import Data.Maybe (isJust)
 import Prelude hiding (lookup)
@@ -17,17 +17,17 @@ lookupBy _ _ RBEmpty = Nothing
 lookupBy cmp v (RBNode _ n l r) =
     case cmp v n of
       EQ -> Just n
-      LT -> case l of
-              RBEmpty -> Nothing
-              _ -> lookupBy cmp v l
-      GT -> case r of
-              RBEmpty -> Nothing
-              _ -> lookupBy cmp v r
+      LT -> lookupBy cmp v l
+      GT -> lookupBy cmp v r
 
 lookup :: Ord a => a -> RBTree a -> Maybe a
 lookup = lookupBy compare
 
 member v = isJust . lookup v
+
+emptyRB = RBEmpty
+fromList :: Ord a => [a] -> RBTree a
+fromList = foldr insert RBEmpty
 
 insertBy :: Ord a => (a -> a -> Ordering) -> a -> RBTree a -> RBTree a
 insertBy cmp v t = RBNode Black v' l' r'
@@ -63,3 +63,5 @@ pretty t = pretty' 0 t
                 rp = pretty' (ind+2) r 
         node ind c n = replicate ind ' ' ++ "+" ++ show c ++ " " ++ show n
 
+printRB :: (Ord a, Show a) => RBTree a -> IO ()
+printRB = mapM_ putStrLn . pretty 
