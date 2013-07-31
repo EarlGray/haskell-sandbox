@@ -38,8 +38,8 @@ divclass clss = H.div ! A.class_ clss
 
 homePage :: ServerPart Response
 homePage = ok $ template "home page" $ do
-    H.h1 "Hello!"
-    H.div ! A.class_ "main" $ do
+    H.h2 "Hello!"
+    divclass "main" $ do
       H.p "This is a test Happstack page created using Blaze"
       H.p "We are proud to show you the following:"
       H.ul $ do
@@ -50,6 +50,7 @@ homePage = ok $ template "home page" $ do
         H.li $ H.a ! href "/you"                     $ "info about you"
         H.li $ H.a ! href "/files"                   $ "files serving"
         H.li $ H.a ! href "/upload"                  $ "files upload"
+      H.p $ H.a ! A.href "/hpaste" $ "HPaste service"
 
 echo :: ServerPart Response
 echo = path $ \(msg :: String) ->
