@@ -4,13 +4,13 @@ module Main where
 
 import Data.Text (pack)
 import qualified Data.Map as Map
-import Control.Monad (forM, forM_, join, sequence)
+import Control.Monad (forM, forM_, join, sequence, msum)
 import Control.Applicative ((<$>), optional)
 import Data.Text (Text)
 import Data.Maybe (fromMaybe)
 
-import Happstack.Lite
-import Happstack.Server (dirs, Request(..), Response, HeaderPair(..))
+import qualified Happstack.Server as Srv
+import Happstack.Server (dirs, Request(..), Response, HeaderPair(..), ok, notFound, toResponse, ServerPart(..), method, path)
 import qualified Happstack.Server as Srv
 
 import Text.Blaze.Html5 ((!), Html, toHtml)
@@ -60,7 +60,7 @@ echo = path $ \(msg :: String) ->
 
 queryParams :: ServerPart Response
 queryParams = do
-    mFoo <- optional $ lookText "foo"
+    mFoo <- optional $ Srv.lookText "foo"
     ok $ template "query params" $ do
       H.p $ "foo = " >> toHtml (show mFoo)
       H.hr
@@ -70,7 +70,7 @@ formPage = msum [ viewForm, processForm ]
   where
     viewForm :: ServerPart Response
     viewForm = do
-      method GET
+      method Srv.GET
       ok $ template "form" $
         H.form ! A.action "/form" ! A.enctype "multipart/form-data" ! A.method "POST" $ do
           H.label ! A.for "msg" $ "Say something clever: "
@@ -79,15 +79,15 @@ formPage = msum [ viewForm, processForm ]
 
     processForm :: ServerPart Response
     processForm = do
-      method POST
-      msg <- lookText "msg"
+      method Srv.POST
+      msg <- Srv.lookText "msg"
       ok $ template "form" $ do
         H.p "You said; "
         H.p (toHtml msg)
 
 fileServing :: ServerPart Response
 fileServing = 
-  serveDirectory EnableBrowsing ["index.htm", "index.html"] "."
+  Srv.serveDirectory Srv.EnableBrowsing ["index.htm", "index.html"] "."
 
 fortune = echo
 upload = echo
@@ -113,14 +113,14 @@ clientInfo = do
 
 myApp :: ServerPart Response
 myApp = msum [
-    dir "echo"      $ echo,
-    dir "query"     $ queryParams,
-    dir "form"      $ formPage,
-    dir "fortune"   $ fortune,
-    dir "files"     $ fileServing,
-    dir "you"       $ clientInfo,
-    dir "hpaste"    $ hpaste "/hpaste" (template "hpaste"),
-    dir "upload"    $ upload,
+    Srv.dir "echo"      $ echo,
+    Srv.dir "query"     $ queryParams,
+    Srv.dir "form"      $ formPage,
+    Srv.dir "fortune"   $ fortune,
+    Srv.dir "files"     $ fileServing,
+    Srv.dir "you"       $ clientInfo,
+    Srv.dir "hpaste"    $ hpaste "/hpaste" (template "hpaste"),
+    Srv.dir "upload"    $ upload,
     path $ \(msg :: String) ->
       if null msg
       then homePage
@@ -130,4 +130,4 @@ myApp = msum [
 main :: IO ()
 main = do
   putStrLn "Server started"
-  serve Nothing myApp
+  Srv.simpleHTTP Srv.nullConf myApp

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+PRIVKEY=web_rsa
+PUBKEY=$PRIVKEY.cert
+
+openssl genrsa 2048 > $PRIVKEY
+openssl req -new -x509 -nodes -sha1 -days 3650 -key $PRIVKEY > $PUBKEY

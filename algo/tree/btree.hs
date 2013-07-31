@@ -1,4 +1,4 @@
-#! /usr/bin/env ghci
+#!/usr/bin/env runhaskell
 -- module BTree (module BTree) where
 
 data Tree e     = Fork e (Tree e) (Tree e) | EmptyTree
