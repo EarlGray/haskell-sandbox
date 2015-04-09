@@ -60,8 +60,6 @@ getBlob gitdir idxmaps hash = do
              let Just (blobpos, blobsz, _) = M.lookup (readSHA hash) idxmap
              (ty, zblob) <- runGet (getblob blobpos blobsz) <$> BL.readFile packfile
              let blob = Zlib.decompress zblob
-             --putStrLn $ "sha    = " ++ hash ++ "\nblobty = " ++ printf "0x%02x" (ty .&. 0x70)
-             -- TODO: if ty & 0x70 = 0x60, then it's a delta commit, handle deltas
              let Just blobty = L.lookup (ty .&. 0x70) [(0x10,"commit"), (0x20,"tree"), (0x30,"blob")]
              return (blobty, fromIntegral $ BL.length blob, blob)
 
@@ -98,6 +96,16 @@ parseIdxFile_v2 idxfile = do
     let (0xff744f63, 2, idxmap') = runGet (liftM3 (,,) getWord32be getWord32be getIdxFile_v2) idxbody
     let offs' = S.fromList $ ((map fst $ M.elems idxmap') ++ [packlen - 20])
     return $ M.map (\(off, crc32) -> (off, (fromJust $ S.lookupGT off offs') - off, crc32)) idxmap'
+
+parseIndex :: BL.ByteString -> [B.ByteString]
+parseIndex dat = map (\([ctsec, ctusec, mtsec, mtusec, stdev, stino, stmode, stuid, stgid, fsize], sha, flags, fname) -> fname) idxdata
+    -- read extensions
+    -- verify SHA
+  where
+    ("DIRC", ver, nentries) = runGet (liftM3 (,,) (BU.toString <$> getByteString 4) getWord32be getWord32be) dat
+    go nb bs = (B.break (== 0) <$> getByteString nb) >>= (\(d, z) -> (if B.null z then go 8 else return)(B.append bs d))
+    getIdxEntry = liftM4 (,,,) (replicateM 10 getWord32be) (getByteString 20) getWord16be (go 2 B.empty)
+    idxdata = runGet (replicateM (fromIntegral nentries) getIdxEntry) (BL.drop 12 dat)
 
 main = do
     argv <- getArgs
@@ -152,5 +160,7 @@ main = do
         ("ref", (':':' ':path)) <- (break (== ':') . head . lines) <$> readFile (gitdir ++ "/HEAD")
         commit <- head <$> lines <$> readFile (gitdir ++ "/" ++ path)
         printCommit commit
+
+      ["ls-files"] -> parseIndex <$> BL.readFile (gitdir ++ "/index") >>= mapM_ (putStrLn . BU.toString)
 
       _ -> error "Usage: omit [cat-file|verify-pack|log]"
