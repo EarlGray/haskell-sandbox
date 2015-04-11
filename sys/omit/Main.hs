@@ -135,13 +135,11 @@ contextDiff nctx diff = groupByAscRange $ IM.toAscList ctxmap
         ctxmap = IM.foldlWithKey (\res n dv -> if isInContext n then IM.insert n dv res else res) IM.empty lnmap
 
 printCtx [] = []
-printCtx grp@((Both (n1,_) (n2,ln)):grp') =
-    let (len1, len2) = (length $ filter notSecond grp, length $ filter notFirst grp)
-        prettygrp = map (\dv -> case dv of
-                            Both (_,ln) _ -> " " ++ ln
-                            First (_, ln) -> "-" ++ ln
-                            Second (_, ln) -> "+" ++ ln) grp
-    in ((printf "@@ -%d,%d +%d,%d @@ " n1 len1 n2 len2) ++ head prettygrp):(tail prettygrp)
+printCtx grp@((Both (n1,_) (n2,ln)):_) = (grpcaption ++ hdln):tllns
+  where (len1, len2) = (length $ filter notSecond grp, length $ filter notFirst grp)
+        diffln dv = case dv of { Both(_,ln) _ -> ' ':ln; First(_,ln) -> '-':ln; Second(_,ln) -> '+':ln }
+        (hdln : tllns) = map diffln grp
+        grpcaption = printf "@@ -%d,%d +%d,%d @@ " n1 len1 n2 len2
 
 main = do
     argv <- getArgs
@@ -161,6 +159,8 @@ main = do
     -- find pack files and load them
     idxfiles <- filter (L.isSuffixOf ".idx") <$> getDirectoryContents (gitdir ++ "/objects/pack")
     idxmaps <- zip idxfiles <$> forM idxfiles (parseIdxFile_v2 . ((gitdir ++ "/objects/pack/") ++))
+
+    let lc = 7  -- longest collision, TODO
 
     case argv of
       ["cat-file", opt, hash] -> do
@@ -207,18 +207,18 @@ main = do
       ("diff":argv') -> do
         case argv' of
           [] -> forM_ index $ \ie -> do
-                    let (fname, stageSHA) = (BU.toString (indFName ie), (showSHA $ B.unpack $ indSHA ie))
-                    workdirBlob <- BL.readFile (workdir ++ "/" ++ fname)
-                    let workSHA = show (SHA.sha1 $ blobify "blob" workdirBlob)
-                    when (workSHA /= stageSHA) $ do
-                      putStrLn $ concat ["### fname=", fname, ", sha=", workSHA, ", stage=", stageSHA]
-                      let workdirLines = map BLU.toString $ BLU.lines workdirBlob
-                      ("blob", _, stagedBlob) <- getBlob gitdir idxmaps stageSHA
-                      let stagedLines = map BLU.toString $ BLU.lines stagedBlob
-                          diffcap = [ printf "diff --git a/%s b/%s" fname fname,
-                                      "index ", printf "--- a/%s\n+++ b/%s" fname fname ]
-                          prettyDiff df = diffcap ++ (concat $ map printCtx $ contextDiff 3 df)
-                      mapM_ putStrLn $ prettyDiff $ Diff.getDiff stagedLines workdirLines
+                  let (fname, stageSHA) = (BU.toString (indFName ie), (showSHA $ B.unpack $ indSHA ie))
+                  workdirBlob <- BL.readFile (workdir ++ "/" ++ fname)
+                  let fileSHA = show (SHA.sha1 $ blobify "blob" workdirBlob)
+                  when (fileSHA /= stageSHA) $ do
+                    let workdirLines = map BLU.toString $ BLU.lines workdirBlob
+                    ("blob", _, stagedBlob) <- getBlob gitdir idxmaps stageSHA
+                    let stagedLines = map BLU.toString $ BLU.lines stagedBlob
+                        diffcap = [ printf "diff --git a/%s b/%s" fname fname,
+                            printf "index %s..%s %o" (take lc stageSHA) (take lc fileSHA) (indMode ie),
+                            printf "--- a/%s\n+++ b/%s" fname fname ]
+                        prettyDiff df = diffcap ++ (concat $ map printCtx $ contextDiff 3 df)
+                    mapM_ putStrLn $ prettyDiff $ Diff.getDiff stagedLines workdirLines
 
           _ -> hPutStrLn stderr $ "Usage: omit diff"
 
