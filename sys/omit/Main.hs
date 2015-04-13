@@ -383,9 +383,10 @@ main = do
       treesha <- writeTree gitdir idxmaps =<< makeTreeFromIndex workdir indexByPath
       let commMeta = [("tree", showSHA treesha), ("parent", prevcommit), ("author", cmAuthor), ("committer", cmAuthor)]
       when (treesha == readSHA prevtree) $ fail "no changes to commit"
-      commit <- commitTree gitdir commMeta commMsg
-      putStrLn $ showSHA commit
-      B.writeFile (gitdir </> "omit_ref") commit
+
+      commit <- showSHA <$> commitTree gitdir commMeta commMsg
+      writeFile (gitdir </> "omit_ref") commit
       Dir.renameFile (gitdir </> "omit_ref") (gitdir </> reffile)
+      putStrLn commit
 
     _ -> error "Usage: omit [cat-file|verify-pack|ls-files|log|diff|add|commit]"
