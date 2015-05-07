@@ -13,6 +13,13 @@ fib(N, X) :-
       else  fib(N - 1, A), fib(N - 2, B), X = A + B
     ).
 
+:- func fibfun(int) = int.
+fibfun(N) = X :-
+    ( if    N =< 2
+      then  X = 1
+      else  X = fibfun(N - 1) + fibfun(N - 2)
+    ).
+
 main(!IO) :-
     fib(17, X),
     io.write_string("fib(17, ", !IO),

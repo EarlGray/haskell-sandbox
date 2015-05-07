@@ -37,12 +37,3 @@ odd(s(o)).
 odd(s(s(X))) :- odd(X).
 
 
-%%% binary numbers
-
-binary_number(o).
-binary_number(zero(X)) :- binary_number(X).
-binary_number(one(X))  :- binary_number(X).
-
-bnum_int(o, 0).
-bnum_int(zero(X), I) :- bnum_int(X, I1), I1 is I + I.
-bnum_int(one(X), I) :- bnum_int(X, I1), I1 is I + I + 1.
