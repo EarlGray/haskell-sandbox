@@ -1,18 +1,16 @@
+import Data.Maybe (isJust)
 import Control.Monad
-import Control.Applicative ((<$>))
 import Control.Exception
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM
 import Graphics.Rendering.OpenGL (($=))
 import qualified Graphics.Rendering.OpenGL as GL
-import qualified Graphics.Rendering.OpenGL.GLU as GLU
 import qualified Graphics.UI.GLFW as GLFW
 
 import System.IO
 import System.Exit
 import Text.Printf
-import GHC.Float
 
 type Distance = GL.GLfloat
 type Angle = GL.GLfloat
@@ -24,6 +22,7 @@ data StateChange
   deriving Show
 
 data WorldState = WorldState {
+    win :: GLFW.Window,
     posX, posY :: Distance,
     angRL, angUD :: Angle,
     isDoomed :: Bool
@@ -35,14 +34,18 @@ int = fromIntegral
 flt :: (Fractional b, Real a) => a -> b
 flt = realToFrac
 
+{-
 c_f2d :: GL.GLfloat -> GL.GLdouble
 c_f2d = flt . float2Double . flt
+-}
 
 glVertex3f :: (GL.GLfloat, GL.GLfloat, GL.GLfloat) -> GL.Vertex3 GL.GLfloat
 glVertex3f (x,y,z) = GL.Vertex3 x y z
 
+{-
 glVector3f :: (GL.GLfloat, GL.GLfloat, GL.GLfloat) -> GL.Vector3 GL.GLfloat
 glVector3f (x,y,z) = GL.Vector3 x y z
+-}
 
 glColor4f :: (GL.GLfloat, GL.GLfloat, GL.GLfloat, GL.GLfloat) -> GL.Color4 GL.GLfloat
 glColor4f (r,g,b,a) = GL.Color4 r g b a
@@ -53,42 +56,48 @@ glVertex3d (x,y,z) = GL.Vertex3 x y z
 glVector3d :: (Double, Double, Double) -> GL.Vector3 GL.GLdouble
 glVector3d (x,y,z) = GL.Vector3 (realToFrac x) (realToFrac y) (realToFrac z)
 
+{-
 glColor4d :: (GL.GLdouble, GL.GLdouble, GL.GLdouble, GL.GLdouble) -> GL.Color4 GL.GLdouble
 glColor4d (r,g,b,a) = GL.Color4 r g b a
-
-data Vector3f = Vector3f (GL.GLfloat, GL.GLfloat, GL.GLfloat)
+-}
 
 toMicroseconds :: Double -> Int
 toMicroseconds t = truncate $ 1000000 * t
 
-
+main :: IO ()
 main = do
-  True <- GLFW.initialize
+  GLFW.setErrorCallback (Just cbErr)
+  ok <- GLFW.init
+  unless ok $ error "init failed"
 
-  True <- GLFW.openWindow GLFW.defaultDisplayOptions {
-    GLFW.displayOptions_numRedBits = 8,
-    GLFW.displayOptions_numGreenBits = 8,
-    GLFW.displayOptions_numBlueBits = 8,
-    GLFW.displayOptions_numDepthBits = 8,
-    GLFW.displayOptions_width = 640,
-    GLFW.displayOptions_height = 480
-  }
+  -- Just _mon <- GLFW.getPrimaryMonitor
 
-  GL.depthFunc $= Just GL.Less
+  mw <- GLFW.createWindow 640 480 "InteractGL" Nothing Nothing
+  let w = case mw of
+            Nothing -> error "createWindow failed"
+            Just v -> v
+
+  GLFW.makeContextCurrent mw
 
   chan <- newTChanIO :: IO (TChan StateChange)
 
-  hwAccel <- GLFW.windowIsHardwareAccelerated
-  putStrLn $ "window is " ++ (if hwAccel then "" else "not ") ++ "hardware accelerated"
+  -- GLFW.windowHint $ GLFW.WindowHint'Visible True
+  GLFW.setKeyCallback w (Just $ cbKey chan)
+  GLFW.setCharCallback w (Just $ cbChar chan)
+  GLFW.setWindowCloseCallback w (Just cbClose)
 
-  GLFW.setKeyCallback (cbKey chan)
-  GLFW.setCharCallback (cbChar chan)
-  GLFW.setWindowCloseCallback cbClose
+  GLFW.swapInterval 1
+  -- GLFW.enableKeyRepeat
 
-  GLFW.enableKeyRepeat
+  GL.depthFunc $= Just GL.Less
 
-  let initworld = WorldState { posX = 0, posY = 0, angRL = (-pi)/4, angUD = 0, isDoomed = False }
-  (mainLoop initworld chan) `finally` quit
+  let initworld = WorldState {
+      win = w,
+      posX = 0, posY = 0,
+      angRL = (-pi)/4, angUD = 0,
+      isDoomed = False
+  }
+  (mainLoop initworld chan) `finally` (quit w)
 
 
 mainLoop :: WorldState -> TChan StateChange -> IO ()
@@ -97,9 +106,10 @@ mainLoop world chan = do
   if isDoomed world'
   then return ()
   else do
-    t0 <- GLFW.getTime
+    Just t0 <- GLFW.getTime
     draw world'
-    dt <- (t0 + spf -) <$> GLFW.getTime
+    Just t1 <- GLFW.getTime
+    let dt = (t0 + spf - t1)
     when (dt > 0) $ threadDelay (toMicroseconds dt)
     mainLoop world' chan
   where fps = 60
@@ -119,10 +129,11 @@ handleEvents chan world = do
 
 
 draw world = do
-  (w, h) <- GLFW.getWindowDimensions
+  (w, h) <- GLFW.getWindowSize (win world)
 
   GL.clear [GL.ColorBuffer, GL.DepthBuffer]
 
+  GL.viewport  $= (GL.Position 0 0, GL.Size (int w) (int h))
   GL.matrixMode $= GL.Projection
   let ratio = (int w / int h)
   GL.loadIdentity
@@ -146,12 +157,13 @@ draw world = do
           in GL.color col >> GL.vertex vtx
 
   printErrors
+  GLFW.swapBuffers (win world)
   GL.flush
-  GLFW.swapBuffers
+  GLFW.pollEvents
 
 printErrors = GL.get GL.errors >>= mapM_ print
 
-quit = GLFW.closeWindow >> GLFW.terminate
+quit _w = GLFW.terminate
 
 moveView (fwd,aside) w =
     w { posX = dX + posX w, posY = dY + posY w }
@@ -171,22 +183,22 @@ turnViewRL ang w = w { angRL = ang'' }
                 else ang'
         ang' = ang + angRL w
 
-cbChar chan c action = do
+cbChar chan win c = do
   let step = 0.5
   let cacts = [ ('w', Move (step,0)), ('s', Move ((-step),0)) ]
-  putStrLn $ printf "%c is %s" c (if action then "pressed" else "released") 
+  putStrLn $ printf "%c is pressed" c
   hFlush stdout
   case lookup c cacts of
     Just act -> atomically $ writeTChan chan act
     _ -> return ()
 
-cbKey chan key action = do
+cbKey chan win key n kst mods = do
   let tangle = 0.02
-  let kacts = [ (GLFW.KeyEsc,   Quit),
-                (GLFW.KeyLeft,  Turn (-tangle)),
-                (GLFW.KeyRight, Turn tangle),
-                (GLFW.KeyDown,  Look (-tangle)),
-                (GLFW.KeyUp,    Look tangle) ]
+  let kacts = [ (GLFW.Key'Escape, Quit),
+                (GLFW.Key'Left,   Turn (-tangle)),
+                (GLFW.Key'Right,  Turn tangle),
+                (GLFW.Key'Down,   Look (-tangle)),
+                (GLFW.Key'Up,     Look tangle) ]
   case lookup key kacts of
     Just act -> atomically $ writeTChan chan act
     _ -> return ()
@@ -195,4 +207,7 @@ cbResize w h = do
   GL.viewport $= (GL.Position 0 0, GL.Size (int w) (int h))
   GL.clear [GL.ColorBuffer, GL.DepthBuffer]
 
-cbClose = GLFW.closeWindow >> GLFW.terminate >> exitSuccess
+cbErr err msg = do
+  print err
+
+cbClose _w = GLFW.terminate >> exitSuccess
