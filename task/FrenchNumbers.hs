@@ -46,3 +46,5 @@ frenchNumber n | n < 100 =
   where
     (twentiesDigit, singleDigit) = n `divMod` 20
 
+main = mapM_ (\n -> putStrLn $ show n ++ "\t" ++ frenchNumber n) [1..99]
+
