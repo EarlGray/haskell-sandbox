@@ -1,4 +1,4 @@
-haskell-snippets
+haskell-sandbox
 ================
 
 Learning Haskell snippets.
