@@ -43,3 +43,55 @@ Proof.
 Qed.
 
 (* Example tautology_1: forall p q r s : Prop, *)
+
+(****** NUMBERS *******)
+Fixpoint sum_n n :=
+  match n with
+    0 => 0
+  | S p => p + sum_n p
+  end.
+
+Lemma sum_n_p : forall n, 2 * sum_n n + n = n * n.
+Proof.
+induction n.
+ simpl. reflexivity.
+
+ (* n: nat, IHn: 2 * sum_n n + n = n * n |= 2 * sum_n (S n) + S n = S n * S n *)
+ assert (SnSn : S n * S n = n*n + 2*n + 1). ring.
+ (* now SnSn is in the context *)
+ rewrite SnSn.
+ rewrite <- IHn. 
+ simpl. (* compute sum_n (S n) symbolically *)
+ (* n + sum_n n + (n + sum_n n + 0) + S n 
+    = sum_n n + (sum_n n + 0) + n + (n + (n + 0)) + 1 *)
+ ring. 
+Qed.
+
+Fixpoint evenb (n:nat): bool :=
+  match n with
+    0 => true
+  | 1 => false
+  | S (S n1) => evenb n1
+  end.
+
+Lemma evenb_p : forall n, evenb n = true -> exists x, n = 2 * x.
+(*Proof.
+ assert (Main: forall n,
+     (evenb n = true -> exists x, n = 2 * x)
+  /\ (evenb n = false -> exists x, S n = 2 * x)).
+ induction n.
+    (* subgoal 1:
+        forall n, (evenb n = true -> exists x, n = 2 * x)
+               /\ (evenb n = false -> exists x, S n = 2 * x)
+     *)
+    split.
+     exists 0; ring. (* true -> true -> exists x, 0 = x + (x + 0) *)
+     intros H; discriminate H. (* get rid of true = false -> ... *)
+    (* subgoal 2: 
+        forall n, (evenb n = true -> exists x, S n = 2 * x) 
+               /\ (evenb n = false -> exists x, S (S n) = 2 * x)
+    *)
+    split.
+     destruct IHn as [_ IHn']; exact IHn'.
+Qed.
+*)
