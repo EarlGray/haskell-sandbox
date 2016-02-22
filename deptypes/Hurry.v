@@ -1,6 +1,14 @@
 (* examples from "Coq in a Hurry" *)
 
 Require Import Arith.
+Require Import Bool.
+
+Lemma impl_distr : forall A B C : Prop, ((A -> B -> C) -> (A -> B) -> (A -> C)).
+Proof.
+  intros. apply H.
+    assumption.
+    apply H0. assumption.
+Qed.
 
 Lemma and_comm_impl : forall A B : Prop, A /\ B -> B /\ A.
 (*Proof. intuition/tauto/firstorder. Qed.*)
@@ -8,6 +16,14 @@ Proof.
   intros A B H. split.
    destruct H as [H1 H2]. exact H2.
    destruct H as [H1 H2]. exact H1.
+Qed.
+
+Lemma or_comm_ : forall A B : Prop, A \/ B -> B \/ A.
+Proof.
+  intros.
+  elim H.
+    intro HA. clear H. right. assumption.
+    intro HB. clear H. left.  assumption.
 Qed.
 
 Example le_3_5 : 3 <= 5.
@@ -74,24 +90,33 @@ Fixpoint evenb (n:nat): bool :=
   | S (S n1) => evenb n1
   end.
 
-Lemma evenb_p : forall n, evenb n = true -> exists x, n = 2 * x.
-(*Proof.
- assert (Main: forall n,
-     (evenb n = true -> exists x, n = 2 * x)
-  /\ (evenb n = false -> exists x, S n = 2 * x)).
+Lemma evenb_succ : forall n:nat, evenb n = negb (evenb (S n)). 
+Proof.
  induction n.
-    (* subgoal 1:
-        forall n, (evenb n = true -> exists x, n = 2 * x)
-               /\ (evenb n = false -> exists x, S n = 2 * x)
-     *)
-    split.
-     exists 0; ring. (* true -> true -> exists x, 0 = x + (x + 0) *)
-     intros H; discriminate H. (* get rid of true = false -> ... *)
-    (* subgoal 2: 
-        forall n, (evenb n = true -> exists x, S n = 2 * x) 
-               /\ (evenb n = false -> exists x, S (S n) = 2 * x)
-    *)
-    split.
-     destruct IHn as [_ IHn']; exact IHn'.
+  simpl; trivial.
+
+  apply negb_sym.
+  rewrite <- IHn.
+  simpl; trivial.
 Qed.
-*)
+
+Lemma evenb_p : forall n,
+  (evenb n = true -> exists x, n = 2 * x) /\ (evenb n = false -> exists x, S n = 2 * x).
+Proof.
+  induction n. split.
+    simpl. exists 0; ring.
+    simpl. intro H; discriminate H.
+    split.
+      destruct IHn as (_, IHnf). intro.
+      destruct IHnf as (IHnf1, IHnf2).
+        rewrite evenb_succ.  rewrite negb_false_iff. assumption.
+        exists IHnf1. assumption.
+
+      destruct IHn as (IHnt, _). intros.
+      destruct IHnt as (IHn1, IHn2).
+        rewrite evenb_succ. rewrite negb_true_iff. assumption.
+        exists (S IHn1). rewrite IHn2. ring.
+Qed.
+
+Lemma evenb_p_true : forall n, evenb n = true -> exists x, n = 2 * x.
+Proof. intro. apply evenb_p. Qed.
