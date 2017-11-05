@@ -1,0 +1,12 @@
+a := 10 ;
+b := 100 ;
+
+if ( a < b ) then
+    {
+        min := a ;
+        max := b
+    }
+else {
+    min := b ;
+    max := a
+    }
